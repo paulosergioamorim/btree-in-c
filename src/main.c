@@ -1,23 +1,39 @@
 #include "btree.h"
 #include <assert.h>
-#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+void swap(int *pX, int *pY) {
+    int temp = *pX;
+    *pX = *pY;
+    *pY = temp;
+}
+
+void shuffle(int *vec, int len) {
+    for (int i = 0; i < len; i++) {
+        int j = rand() % (i + 1);
+        swap(vec + i, vec + j);
+    }
+}
 
 int main(int argc, char **argv) {
+    srand(time(0) % 43);
     BTree *btree = btree_init(5);
 
-    for (int i = 1; i <= 1000; i++) {
-        btree_insert(btree, i, i);
-    }
+    int len = 30000;
+    int *keys = malloc(len * sizeof(*keys));
 
-    int value = 0;
+    for (int i = 0; i < len; i++)
+        keys[i] = i + 1;
 
-    for (int i = 1; i <= 10; i++) {
-        if (!btree_search(btree, i, &value))
-            printf("CHAVE %d PERDIDA\n", i);
+    shuffle(keys, len);
 
-        else
-            printf("CHAVE %d ENCONTRADA\n", i);
-    }
+    for (int i = 0; i < len; i++)
+        btree_insert(btree, keys[i], keys[i]);
+
+    // btree_display(btree);
+    btree = btree_destroy(btree);
+    free(keys);
 
     return 0;
 }
