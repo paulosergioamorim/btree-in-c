@@ -1,6 +1,9 @@
 #include "btree.h"
+#include "queue.h"
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 BTree_Node *btree_append_node(BTree *btree);
 
@@ -61,9 +64,10 @@ BTree_Node *btree_node_destroy(BTree_Node *node) {
         return NULL;
     }
 
-    for (int i = 0; i < node->count_keys; i++)
+    for (int i = 0; i <= node->count_keys; i++)
         node->children[i] = btree_node_destroy(node->children[i]);
 
+    free(node->keys);
     free(node->values);
     free(node->children);
     free(node);
@@ -105,36 +109,33 @@ BTree_Node *btree_append_node(BTree *btree) {
 void btree_node_split_child(BTree *btree, BTree_Node *x, int i) {
     BTree_Node *z = btree_append_node(btree);
     BTree_Node *y = NULL;
+    int t = btree->t;
 
     y = x->children[i];
     z->is_leaf = y->is_leaf;
-    z->count_keys = btree->t - 1;
+    z->count_keys = t - 1;
 
-    for (int j = 0; j < btree->t - 1; j++) {
-        z->keys[j] = y->keys[j + btree->t];
-        z->values[j] = y->values[j + btree->t];
-    }
+    memcpy(z->keys, y->keys + t, (t - 1) * sizeof(*z->keys));
+    memcpy(z->values, y->values + t, (t - 1) * sizeof(*z->values));
 
     if (!y->is_leaf)
-        for (size_t j = 0; j < btree->t; j++)
-            z->children[j] = y->children[j + btree->t];
+        memcpy(z->children, y->children + t, t * sizeof(*z->children));
 
-    y->count_keys = btree->t - 1;
+    y->count_keys = t - 1;
 
-    for (int j = x->count_keys; j > i + 1; j--)
-        x->children[j + 1] = x->children[j];
+    memmove(x->children + i + 1, x->children + i, (x->count_keys - i + 1) * sizeof(*x->children));
 
     x->children[i + 1] = z;
 
-    for (int j = x->count_keys - 1; j > i; j--)
-        x->keys[j + 1] = x->keys[j];
+    memmove(x->keys + i + 1, x->keys + i, (x->count_keys - i) * sizeof(*x->keys));
+    memmove(x->values + i + 1, x->values + i, (x->count_keys - i) * sizeof(*x->values));
 
-    x->keys[i] = y->keys[i];
+    x->keys[i] = y->keys[t - 1];
     x->count_keys++;
 }
 
 void btree_node_insert_nonfull(BTree *btree, BTree_Node *x, int key, int value) {
-    int i = x->count_keys;
+    int i = x->count_keys - 1;
 
     if (x->is_leaf) {
         while (i >= 0 && key < x->keys[i]) {
@@ -154,12 +155,44 @@ void btree_node_insert_nonfull(BTree *btree, BTree_Node *x, int key, int value) 
 
     i++;
 
-    if (x->children[i]->count_keys == btree->M - 1) {
-        btree_node_split_child(btree, x, i);
-
-        if (key > x->keys[i])
-            i++;
+    if (x->children[i]->count_keys < btree->M - 1) {
+        btree_node_insert_nonfull(btree, x->children[i], key, value);
+        return;
     }
 
+    btree_node_split_child(btree, x, i);
+
+    if (key > x->keys[i])
+        i++;
+
     btree_node_insert_nonfull(btree, x->children[i], key, value);
+}
+
+void btree_display(BTree *btree) {
+    BTree_Queue *queue = btree_queue_init(btree->count_nodes);
+    BTree_Node *last_level_node = btree->root;
+    btree_queue_enqueue(queue, btree->root);
+
+    while (!btree_queue_is_empty(queue)) {
+        BTree_Node *node = btree_queue_dequeue(queue);
+        printf("[ ");
+
+        for (int i = 0; i < node->count_keys; i++)
+            printf("%d ", node->keys[i]);
+
+        printf("] ");
+
+        if (node == last_level_node)
+            printf("\n");
+
+        if (node->is_leaf)
+            continue;
+
+        for (int i = 0; i <= node->count_keys; i++)
+            btree_queue_enqueue(queue, node->children[i]);
+
+        last_level_node = node->children[node->count_keys];
+    }
+
+    queue = btree_queue_destroy(queue);
 }

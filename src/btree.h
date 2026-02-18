@@ -29,3 +29,5 @@ void btree_delete(BTree *btree, int key);
 
 BTree *btree_destroy(BTree *btree);
 
+void btree_display(BTree *btree);
+
