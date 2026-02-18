@@ -31,18 +31,18 @@ int btree_search(BTree *btree, int key, int *value) {
 }
 
 void btree_insert(BTree *btree, int key, int value) {
-    if (btree->root->count_keys == btree->M - 1) {
-        BTree_Node *s = btree_append_node(btree);
-        s->is_leaf = 0;
-        s->count_keys = 0;
-        s->children[0] = btree->root;
-        btree->root = s;
-        btree_node_split_child(btree, s, 0);
-        btree_node_insert_nonfull(btree, s, key, value);
+    if (btree->root->count_keys <= btree->M - 1) {
+        btree_node_insert_nonfull(btree, btree->root, key, value);
         return;
     }
 
-    btree_node_insert_nonfull(btree, btree->root, key, value);
+    BTree_Node *s = btree_append_node(btree);
+    s->is_leaf = 0;
+    s->count_keys = 0;
+    s->children[0] = btree->root;
+    btree->root = s;
+    btree_node_split_child(btree, s, 0);
+    btree_node_insert_nonfull(btree, s, key, value);
 }
 
 void btree_delete(BTree *btree, int key) {
@@ -59,16 +59,9 @@ BTree *btree_destroy(BTree *btree) {
 BTree_Node *btree_node_destroy(BTree_Node *node) {
     assert(node);
 
-    if (node->is_leaf) {
-        free(node->keys);
-        free(node->values);
-        free(node->children);
-        free(node);
-        return NULL;
-    }
-
-    for (int i = 0; i <= node->count_keys; i++)
-        node->children[i] = btree_node_destroy(node->children[i]);
+    if (!node->is_leaf)
+        for (int i = 0; i <= node->count_keys; i++)
+            node->children[i] = btree_node_destroy(node->children[i]);
 
     free(node->keys);
     free(node->values);
