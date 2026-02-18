@@ -1,4 +1,5 @@
 #include "btree.h"
+#include "btree_delete.h"
 #include "queue.h"
 #include <assert.h>
 #include <stdio.h>
@@ -44,7 +45,9 @@ void btree_insert(BTree *btree, int key, int value) {
     btree_node_insert_nonfull(btree, btree->root, key, value);
 }
 
-void btree_delete(BTree *btree, int key);
+void btree_delete(BTree *btree, int key) {
+    btree_node_delete(btree, btree->root, key);
+}
 
 BTree *btree_destroy(BTree *btree) {
     assert(btree);
