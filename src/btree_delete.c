@@ -24,7 +24,7 @@ KVC btree_node_get_min(BTree_Node *node);
 
 BTree_Node *btree_poll_node(BTree *btree, BTree_Node *node);
 
-void btree_node_merge(BTree *btree, BTree_Node *x, int i, int t);
+BTree_Node *btree_node_merge(BTree *btree, BTree_Node *x, int i, int t);
 
 int btree_node_redistribute(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int i, int t);
 
@@ -64,15 +64,8 @@ void btree_node_delete(BTree *btree, BTree_Node *node, int key) {
             return;
         }
 
-        btree_node_merge(btree, node, i, t);
+        btree->root = btree_node_merge(btree, node, i, t);
         btree_node_delete(btree, y, key);
-
-        if (btree->root == node && node->count_keys == 0) {
-            BTree_Node *s = node->children[0];
-            btree_poll_node(btree, node);
-            btree->root = s;
-            return;
-        }
     }
 
     BTree_Node *x_ci = node->children[i];
@@ -89,12 +82,6 @@ void btree_node_delete(BTree *btree, BTree_Node *node, int key) {
 
     x_ci = node->children[i] = btree_node_concat(btree, node, x_ci, i, t);
     btree_node_delete(btree, x_ci, key);
-
-    if (btree->root == node && node->count_keys == 0) {
-        BTree_Node *s = node->children[0];
-        btree_poll_node(btree, node);
-        btree->root = s;
-    }
 }
 
 KV btree_node_get_pred(BTree_Node *node, int i) {
@@ -127,7 +114,7 @@ KVC btree_node_get_min(BTree_Node *node) {
     return (KVC){.key = node->keys[0], .value = node->values[0], .child = node->children[0]};
 }
 
-void btree_node_merge(BTree *btree, BTree_Node *x, int i, int t) {
+BTree_Node *btree_node_merge(BTree *btree, BTree_Node *x, int i, int t) {
     BTree_Node *y = x->children[i];
     BTree_Node *z = x->children[i + 1];
     y->keys[y->count_keys] = x->keys[i];
@@ -144,6 +131,14 @@ void btree_node_merge(BTree *btree, BTree_Node *x, int i, int t) {
 
     y->count_keys = 2 * t - 1;
     z = btree_poll_node(btree, z);
+
+    if (btree->root == x && x->count_keys == 0) {
+        BTree_Node *s = x->children[0];
+        btree_poll_node(btree, x);
+        btree->root = s;
+    }
+
+    return btree->root;
 }
 
 BTree_Node *btree_poll_node(BTree *btree, BTree_Node *node) {
@@ -209,6 +204,6 @@ BTree_Node *btree_node_concat(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int
         return sibbling_left;
     }
 
-    btree_node_merge(btree, x, i, t);
+    btree->root = btree_node_merge(btree, x, i, t);
     return x_ci;
 }
