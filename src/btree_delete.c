@@ -20,6 +20,10 @@ KVC btree_node_get_max(BTree_Node *node);
 
 KVC btree_node_get_min(BTree_Node *node);
 
+BTree_Node *btree_poll_node(BTree *btree, BTree_Node *node);
+
+void btree_node_merge(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_Node *z, int i, int t);
+
 void btree_node_delete(BTree *btree, BTree_Node *node, int key) {
     int i = 0;
 
@@ -64,4 +68,31 @@ KVC btree_node_get_max(BTree_Node *node) {
 
 KVC btree_node_get_min(BTree_Node *node) {
     return (KVC){.key = node->keys[0], .value = node->values[0], .child = node->children[0]};
+}
+
+void btree_node_merge(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_Node *z, int i, int t) {
+    y->keys[y->count_keys] = x->keys[i];
+    y->values[y->count_keys] = x->values[i];
+    y->count_keys++;
+    memmove(x->keys + i, x->keys + i + 1, (x->count_keys - i - 1) * sizeof(*x->keys));
+    memmove(x->values + i, x->values + i + 1, (x->count_keys - i - 1) * sizeof(*x->values));
+    x->count_keys--;
+    memcpy(y->keys + y->count_keys, z->keys, (t - 1) * sizeof(*y->keys));
+    memcpy(y->values + y->count_keys, z->values, (t - 1) * sizeof(*y->keys));
+
+    if (y->is_leaf)
+        memcpy(y->children + y->count_keys, z->children, t * sizeof(*y->keys));
+
+    y->count_keys = 2 * t - 1;
+    z = btree_poll_node(btree, z);
+}
+
+BTree_Node *btree_poll_node(BTree *btree, BTree_Node *node) {
+    assert(node);
+    free(node->keys);
+    free(node->values);
+    free(node->children);
+    free(node);
+    btree->count_nodes--;
+    return NULL;
 }
