@@ -178,16 +178,16 @@ void btree_display(BTree *btree) {
 
         printf("] ");
 
-        if (node == last_level_node)
+        if (node == last_level_node) {
+            last_level_node = node->children[node->count_keys];
             printf("\n");
+        }
 
         if (node->is_leaf)
             continue;
 
         for (int i = 0; i <= node->count_keys; i++)
             btree_queue_enqueue(queue, node->children[i]);
-
-        last_level_node = node->children[node->count_keys];
     }
 
     queue = btree_queue_destroy(queue);
