@@ -1,5 +1,6 @@
 #include "btree.h"
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -17,10 +18,10 @@ void shuffle(int *vec, int len) {
 }
 
 int main(int argc, char **argv) {
-    srand(time(0) % 43);
-    BTree *btree = btree_init(5);
+    srand(42);
+    BTree *btree = btree_init(2);
 
-    int len = 30000;
+    int len = 30;
     int *keys = malloc(len * sizeof(*keys));
 
     for (int i = 0; i < len; i++)
@@ -31,6 +32,8 @@ int main(int argc, char **argv) {
     for (int i = 0; i < len; i++)
         btree_insert(btree, keys[i], keys[i]);
 
+    btree_display(btree);
+    // printf("\n");
     // btree_display(btree);
     btree = btree_destroy(btree);
     free(keys);
