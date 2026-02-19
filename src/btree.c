@@ -31,7 +31,7 @@ int btree_search(BTree *btree, int key, int *value) {
 }
 
 void btree_insert(BTree *btree, int key, int value) {
-    if (btree->root->count_keys <= btree->M - 1) {
+    if (btree->root->count_keys < btree->M - 1) {
         btree_node_insert_nonfull(btree, btree->root, key, value);
         return;
     }
