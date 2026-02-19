@@ -21,7 +21,19 @@ KVC btree_node_get_max(BTree_Node *node);
 KVC btree_node_get_min(BTree_Node *node);
 
 void btree_node_delete(BTree *btree, BTree_Node *node, int key) {
-    assert(0 && "TODO!");
+    int i = 0;
+
+    while (i < node->count_keys && key > node->keys[i])
+        i++;
+
+    if (node->is_leaf) {
+        if (i < node->count_keys && key == node->keys[i]) {
+            memmove(node->keys + i, node->keys + i + 1, (node->count_keys - i - 1) * sizeof(*node->keys));
+            memmove(node->values + i, node->values + i + 1, (node->count_keys - i - 1) * sizeof(*node->values));
+            node->count_keys--;
+            return;
+        }
+    }
 }
 
 KV btree_node_get_pred(BTree_Node *node, int i) {
