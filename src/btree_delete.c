@@ -1,5 +1,7 @@
 #include "btree.h"
 #include <assert.h>
+#include <stdlib.h>
+#include <string.h>
 
 typedef struct kv {
     int key;
@@ -26,18 +28,50 @@ void btree_node_merge(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_Node *z,
 
 void btree_node_delete(BTree *btree, BTree_Node *node, int key) {
     int i = 0;
+    int t = btree->t;
 
     while (i < node->count_keys && key > node->keys[i])
         i++;
 
-    if (node->is_leaf) {
-        if (i < node->count_keys && key == node->keys[i]) {
+    if (i < node->count_keys && key == node->keys[i]) {
+        if (node->is_leaf) {
             memmove(node->keys + i, node->keys + i + 1, (node->count_keys - i - 1) * sizeof(*node->keys));
             memmove(node->values + i, node->values + i + 1, (node->count_keys - i - 1) * sizeof(*node->values));
             node->count_keys--;
             return;
         }
+
+        BTree_Node *y = node->children[i];
+        BTree_Node *z = node->children[i + 1];
+
+        if (y->count_keys >= t) {
+            KV pred = btree_node_get_pred(node, i);
+            node->keys[i] = pred.key;
+            node->values[i] = pred.value;
+            btree_node_delete(btree, y, pred.key);
+            return;
+        }
+
+        if (z->count_keys >= t) {
+            KV post = btree_node_get_post(node, i);
+            node->keys[i] = post.key;
+            node->values[i] = post.value;
+            btree_node_delete(btree, z, post.key);
+            return;
+        }
+
+        btree_node_merge(btree, node, y, z, i, t);
+        btree_node_delete(btree, y, key);
+
+        if (btree->root == node && node->count_keys == 0) {
+            BTree_Node *s = node->children[0];
+            btree_poll_node(btree, node);
+            btree->root = s;
+            return;
+        }
     }
+
+    assert(0 && "Caso 3");
 }
 
 KV btree_node_get_pred(BTree_Node *node, int i) {
