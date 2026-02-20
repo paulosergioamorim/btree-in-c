@@ -221,4 +221,3 @@ BTree_Node *btree_node_concat(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int
     btree->root = btree_node_merge(btree, x, i, t);
     return x_ci;
 }
-
