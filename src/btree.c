@@ -45,8 +45,8 @@ void btree_insert(BTree *btree, int key, int value) {
     btree_node_insert_nonfull(btree, s, key, value);
 }
 
-void btree_delete(BTree *btree, int key) {
-    btree_node_delete(btree, btree->root, key);
+int btree_delete(BTree *btree, int key) {
+    return btree_node_delete(btree, btree->root, key);
 }
 
 BTree *btree_destroy(BTree *btree) {

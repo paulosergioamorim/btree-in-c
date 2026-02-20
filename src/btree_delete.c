@@ -1,5 +1,6 @@
 #include "btree.h"
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -28,13 +29,9 @@ BTree_Node *btree_node_merge(BTree *btree, BTree_Node *x, int i, int t);
 
 int btree_node_redistribute(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int i, int t);
 
-BTree_Node *btree_node_concat(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int i, int t);
+BTree_Node *btree_node_concatenate(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int i, int t);
 
-void btree_node_rotate_left(BTree_Node *x, int i);
-
-void btree_node_rotate_right(BTree_Node *x, int i);
-
-void btree_node_delete(BTree *btree, BTree_Node *node, int key) {
+int btree_node_delete(BTree *btree, BTree_Node *node, int key) {
     int i = 0;
     int t = btree->t;
 
@@ -46,7 +43,7 @@ void btree_node_delete(BTree *btree, BTree_Node *node, int key) {
             memmove(node->keys + i, node->keys + i + 1, (node->count_keys - i - 1) * sizeof(*node->keys));
             memmove(node->values + i, node->values + i + 1, (node->count_keys - i - 1) * sizeof(*node->values));
             node->count_keys--;
-            return;
+            return 1;
         }
 
         BTree_Node *y = node->children[i];
@@ -56,39 +53,33 @@ void btree_node_delete(BTree *btree, BTree_Node *node, int key) {
             KV pred = btree_node_get_pred(node, i);
             node->keys[i] = pred.key;
             node->values[i] = pred.value;
-            btree_node_delete(btree, y, pred.key);
-            return;
+            return btree_node_delete(btree, y, pred.key);
         }
 
         if (z->count_keys >= t) {
             KV post = btree_node_get_post(node, i);
             node->keys[i] = post.key;
             node->values[i] = post.value;
-            btree_node_delete(btree, z, post.key);
-            return;
+            return btree_node_delete(btree, z, post.key);
         }
 
         btree->root = btree_node_merge(btree, node, i, t);
-        btree_node_delete(btree, y, key);
+        return btree_node_delete(btree, y, key);
     }
 
     if (node->is_leaf)
-        return;
+        return 0;
 
     BTree_Node *x_ci = node->children[i];
 
-    if (x_ci->count_keys > t - 1) {
-        btree_node_delete(btree, x_ci, key);
-        return;
-    }
+    if (x_ci->count_keys > t - 1)
+        return btree_node_delete(btree, x_ci, key);
 
-    if (btree_node_redistribute(btree, node, x_ci, i, t)) {
-        btree_node_delete(btree, x_ci, key);
-        return;
-    }
+    if (btree_node_redistribute(btree, node, x_ci, i, t))
+        return btree_node_delete(btree, x_ci, key);
 
-    x_ci = btree_node_concat(btree, node, x_ci, i, t);
-    btree_node_delete(btree, x_ci, key);
+    x_ci = btree_node_concatenate(btree, node, x_ci, i, t);
+    return btree_node_delete(btree, x_ci, key);
 }
 
 KV btree_node_get_pred(BTree_Node *node, int i) {
@@ -143,7 +134,7 @@ BTree_Node *btree_node_merge(BTree *btree, BTree_Node *x, int i, int t) {
     if (btree->root == x && x->count_keys == 0) {
         BTree_Node *s = x->children[0];
         btree_poll_node(btree, x);
-        btree->root = s;
+        return s;
     }
 
     return btree->root;
@@ -174,6 +165,10 @@ int btree_node_redistribute(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int i
             memmove(x_ci->children + 1, x_ci->children, t * sizeof(*x_ci->children));
 
         KVC max = btree_node_get_max(sibbling_left);
+
+        if (i == 1)
+            i--;
+
         x_ci->keys[0] = x->keys[i];
         x_ci->values[0] = x->values[i];
         x_ci->children[0] = max.child;
@@ -210,7 +205,7 @@ int btree_node_redistribute(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int i
     return 0;
 }
 
-BTree_Node *btree_node_concat(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int i, int t) {
+BTree_Node *btree_node_concatenate(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int i, int t) {
     BTree_Node *sibbling_left = (i > 0) ? x->children[i - 1] : NULL;
 
     if (sibbling_left) {

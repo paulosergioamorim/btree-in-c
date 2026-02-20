@@ -25,7 +25,7 @@ int btree_search(BTree *btree, int key, int *value);
 
 void btree_insert(BTree *btree, int key, int value);
 
-void btree_delete(BTree *btree, int key);
+int btree_delete(BTree *btree, int key);
 
 BTree *btree_destroy(BTree *btree);
 
