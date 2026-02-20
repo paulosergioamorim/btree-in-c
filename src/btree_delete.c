@@ -1,8 +1,19 @@
 #include "btree.h"
 #include <assert.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define BTREE_DELETE_TRACE 1
+
+#ifdef BTREE_DELETE_TRACE
+
+#include <stdio.h>
+
+#define trace(expr)                                                                                                    \
+    if (BTREE_DELETE_TRACE)                                                                                            \
+    (expr)
+
+#endif
 
 typedef struct kv {
     int key;
@@ -113,6 +124,7 @@ KVC btree_node_get_min(BTree_Node *node) {
 }
 
 BTree_Node *btree_node_merge(BTree *btree, BTree_Node *x, int i, int t) {
+    trace(printf("-> btree_node_merge(btree, x, %d, %d\n", i, t));
     BTree_Node *y = x->children[i];
     BTree_Node *z = x->children[i + 1];
     y->keys[y->count_keys] = x->keys[i];
@@ -157,30 +169,8 @@ int btree_node_redistribute(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int i
     if (!sibbling_right)
         i--;
 
-    if (sibbling_left && sibbling_left->count_keys >= t) {
-        memmove(x_ci->keys + 1, x_ci->keys, (t - 1) * sizeof(*x_ci->keys));
-        memmove(x_ci->values + 1, x_ci->values, (t - 1) * sizeof(*x_ci->values));
-
-        if (!x_ci->is_leaf)
-            memmove(x_ci->children + 1, x_ci->children, t * sizeof(*x_ci->children));
-
-        KVC max = btree_node_get_max(sibbling_left);
-
-        if (i == 1)
-            i--;
-
-        x_ci->keys[0] = x->keys[i];
-        x_ci->values[0] = x->values[i];
-        x_ci->children[0] = max.child;
-        x_ci->count_keys++;
-        sibbling_left->count_keys--;
-        x->keys[i] = max.key;
-        x->values[i] = max.value;
-
-        return 1;
-    }
-
     if (sibbling_right && sibbling_right->count_keys >= t) {
+        trace(printf("-> btree_node_redistribute_right(btree, x, x_ci, %d, %d\n", i, t));
         KVC min = btree_node_get_min(sibbling_right);
         memmove(sibbling_right->keys, sibbling_right->keys + 1,
                 (sibbling_right->count_keys) * sizeof(*sibbling_right->keys));
@@ -202,6 +192,26 @@ int btree_node_redistribute(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int i
         return 1;
     }
 
+    if (sibbling_left && sibbling_left->count_keys >= t) {
+        trace(printf("-> btree_node_redistribute_left(btree, x, x_ci, %d, %d\n", i, t));
+        memmove(x_ci->keys + 1, x_ci->keys, (t - 1) * sizeof(*x_ci->keys));
+        memmove(x_ci->values + 1, x_ci->values, (t - 1) * sizeof(*x_ci->values));
+
+        if (!x_ci->is_leaf)
+            memmove(x_ci->children + 1, x_ci->children, t * sizeof(*x_ci->children));
+
+        KVC max = btree_node_get_max(sibbling_left);
+        x_ci->keys[0] = x->keys[i];
+        x_ci->values[0] = x->values[i];
+        x_ci->children[0] = max.child;
+        x_ci->count_keys++;
+        sibbling_left->count_keys--;
+        x->keys[i] = max.key;
+        x->values[i] = max.value;
+
+        return 1;
+    }
+
     return 0;
 }
 
@@ -209,10 +219,12 @@ BTree_Node *btree_node_concatenate(BTree *btree, BTree_Node *x, BTree_Node *x_ci
     BTree_Node *sibbling_left = (i > 0) ? x->children[i - 1] : NULL;
 
     if (sibbling_left) {
+        trace(printf("-> btree_node_concatenate_left(btree, x, x_ci, %d, %d\n", i, t));
         btree->root = btree_node_merge(btree, x, i - 1, t);
         return sibbling_left;
     }
 
+    trace(printf("-> btree_node_concatenate_right(btree, x, x_ci, %d, %d\n", i, t));
     btree->root = btree_node_merge(btree, x, i, t);
     return x_ci;
 }
