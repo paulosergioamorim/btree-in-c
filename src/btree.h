@@ -1,7 +1,5 @@
 #pragma once
 
-#include <stddef.h>
-
 typedef struct btree_node BTree_Node;
 
 struct btree_node {
