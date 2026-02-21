@@ -3,36 +3,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define BTREE_DELETE_TRACE 1
-
-#ifdef BTREE_DELETE_TRACE
-
-#include <stdio.h>
-
-#define trace(expr)                                                                                                    \
-    if (BTREE_DELETE_TRACE)                                                                                            \
-    (expr)
-
-#endif
-
 typedef struct kv {
     int key;
     int value;
 } KV;
 
-typedef struct kvc {
-    int key;
-    int value;
-    BTree_Node *child; // pred or post key
-} KVC;
-
 KV btree_node_get_pred(BTree_Node *node, int i);
 
 KV btree_node_get_post(BTree_Node *node, int i);
-
-KVC btree_node_get_max(BTree_Node *node);
-
-KVC btree_node_get_min(BTree_Node *node);
 
 BTree_Node *btree_poll_node(BTree *btree, BTree_Node *node);
 
@@ -41,6 +19,16 @@ BTree_Node *btree_node_merge(BTree *btree, BTree_Node *x, int i, int t);
 int btree_node_redistribute(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int i, int t);
 
 BTree_Node *btree_node_concatenate(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int i, int t);
+
+/**
+ * Rotação à esquerda em torno da i-ésima chave de x.
+ */
+void btree_node_rotate_left(BTree_Node *x, int i);
+
+/**
+ * Rotação à direita em torno da i-ésima chave de x.
+ */
+void btree_node_rotate_right(BTree_Node *x, int i);
 
 int btree_node_delete(BTree *btree, BTree_Node *node, int key) {
     int i = 0;
@@ -113,18 +101,7 @@ KV btree_node_get_post(BTree_Node *node, int i) {
     return (KV){.key = post->keys[0], .value = post->values[0]};
 }
 
-KVC btree_node_get_max(BTree_Node *node) {
-    return (KVC){.key = node->keys[node->count_keys - 1],
-                 .value = node->values[node->count_keys - 1],
-                 .child = node->children[node->count_keys]};
-}
-
-KVC btree_node_get_min(BTree_Node *node) {
-    return (KVC){.key = node->keys[0], .value = node->values[0], .child = node->children[0]};
-}
-
 BTree_Node *btree_node_merge(BTree *btree, BTree_Node *x, int i, int t) {
-    trace(printf("-> btree_node_merge(btree, x, %d, %d\n", i, t));
     BTree_Node *y = x->children[i];
     BTree_Node *z = x->children[i + 1];
     y->keys[y->count_keys] = x->keys[i];
@@ -166,49 +143,13 @@ int btree_node_redistribute(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int i
     BTree_Node *sibbling_left = (i > 0) ? x->children[i - 1] : NULL;
     BTree_Node *sibbling_right = (i < x->count_keys) ? x->children[i + 1] : NULL;
 
-    if (!sibbling_right)
-        i--;
-
-    if (sibbling_right && sibbling_right->count_keys >= t) {
-        trace(printf("-> btree_node_redistribute_right(btree, x, x_ci, %d, %d\n", i, t));
-        KVC min = btree_node_get_min(sibbling_right);
-        memmove(sibbling_right->keys, sibbling_right->keys + 1,
-                (sibbling_right->count_keys) * sizeof(*sibbling_right->keys));
-        memmove(sibbling_right->values, sibbling_right->values + 1,
-                (sibbling_right->count_keys) * sizeof(*sibbling_right->values));
-
-        if (!sibbling_right->is_leaf)
-            memmove(sibbling_right->children, sibbling_right->children + 1,
-                    (sibbling_right->count_keys + 1) * sizeof(*sibbling_right->children));
-
-        sibbling_right->count_keys--;
-        x_ci->keys[x_ci->count_keys] = x->keys[i];
-        x_ci->values[x_ci->count_keys] = x->values[i];
-        x_ci->count_keys++;
-        x_ci->children[x_ci->count_keys] = min.child;
-        x->keys[i] = min.key;
-        x->values[i] = min.value;
-
+    if (sibbling_left && sibbling_left->count_keys >= t) {
+        btree_node_rotate_right(x, i - 1);
         return 1;
     }
 
-    if (sibbling_left && sibbling_left->count_keys >= t) {
-        trace(printf("-> btree_node_redistribute_left(btree, x, x_ci, %d, %d\n", i, t));
-        memmove(x_ci->keys + 1, x_ci->keys, (t - 1) * sizeof(*x_ci->keys));
-        memmove(x_ci->values + 1, x_ci->values, (t - 1) * sizeof(*x_ci->values));
-
-        if (!x_ci->is_leaf)
-            memmove(x_ci->children + 1, x_ci->children, t * sizeof(*x_ci->children));
-
-        KVC max = btree_node_get_max(sibbling_left);
-        x_ci->keys[0] = x->keys[i];
-        x_ci->values[0] = x->values[i];
-        x_ci->children[0] = max.child;
-        x_ci->count_keys++;
-        sibbling_left->count_keys--;
-        x->keys[i] = max.key;
-        x->values[i] = max.value;
-
+    if (sibbling_right && sibbling_right->count_keys >= t) {
+        btree_node_rotate_left(x, i);
         return 1;
     }
 
@@ -219,12 +160,57 @@ BTree_Node *btree_node_concatenate(BTree *btree, BTree_Node *x, BTree_Node *x_ci
     BTree_Node *sibbling_left = (i > 0) ? x->children[i - 1] : NULL;
 
     if (sibbling_left) {
-        trace(printf("-> btree_node_concatenate_left(btree, x, x_ci, %d, %d\n", i, t));
         btree->root = btree_node_merge(btree, x, i - 1, t);
         return sibbling_left;
     }
 
-    trace(printf("-> btree_node_concatenate_right(btree, x, x_ci, %d, %d\n", i, t));
     btree->root = btree_node_merge(btree, x, i, t);
     return x_ci;
+}
+
+void btree_node_rotate_left(BTree_Node *x, int i) {
+    BTree_Node *y = x->children[i];
+    BTree_Node *z = x->children[i + 1];
+
+    y->keys[y->count_keys] = x->keys[i];
+    y->values[y->count_keys] = x->values[i];
+
+    if (!y->is_leaf)
+        y->children[y->count_keys + 1] = z->children[0];
+
+    y->count_keys++;
+
+    x->keys[i] = z->keys[0];
+    x->values[i] = z->keys[0];
+
+    memmove(z->keys, z->keys + 1, z->count_keys * sizeof(*z->keys));
+    memmove(z->values, z->values + 1, z->count_keys * sizeof(*z->values));
+
+    if (!z->is_leaf)
+        memmove(z->children, z->children + 1, (z->count_keys + 1) * sizeof(*z->children));
+
+    z->count_keys--;
+}
+
+void btree_node_rotate_right(BTree_Node *x, int i) {
+    BTree_Node *y = x->children[i];
+    BTree_Node *z = x->children[i + 1];
+
+    memmove(z->keys + 1, z->keys, z->count_keys * sizeof(*z->keys));
+    memmove(z->values + 1, z->values, z->count_keys * sizeof(*z->values));
+
+    if (!z->is_leaf)
+        memmove(z->children + 1, z->children, (z->count_keys + 1) * sizeof(*z->children));
+
+    z->keys[0] = x->keys[i];
+    z->values[0] = x->values[i];
+
+    if (!z->is_leaf)
+        z->children[0] = y->children[y->count_keys];
+
+    z->count_keys++;
+
+    x->keys[i] = y->keys[y->count_keys - 1];
+    x->values[i] = y->values[y->count_keys - 1];
+    y->count_keys--;
 }
