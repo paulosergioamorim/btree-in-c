@@ -127,6 +127,7 @@ void btree_node_split_child(BTree *btree, BTree_Node *x, int i) {
     memmove(x->values + i + 1, x->values + i, (x->count_keys - i) * sizeof(*x->values));
 
     x->keys[i] = y->keys[t - 1];
+    x->values[i] = y->values[t - 1];
     x->count_keys++;
 }
 
