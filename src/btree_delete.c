@@ -109,7 +109,7 @@ BTree_Node *btree_node_merge(BTree *btree, BTree_Node *x, int i, int t) {
     y->count_keys++;
     memmove(x->keys + i, x->keys + i + 1, (x->count_keys - i - 1) * sizeof(*x->keys));
     memmove(x->values + i, x->values + i + 1, (x->count_keys - i - 1) * sizeof(*x->values));
-    memmove(x->children + i + 1, x->children + i + 2, (x->count_keys - i) * sizeof(*x->children));
+    memmove(x->children + i + 1, x->children + i + 2, (x->count_keys - i - 1) * sizeof(*x->children));
     x->count_keys--;
     memcpy(y->keys + y->count_keys, z->keys, (t - 1) * sizeof(*y->keys));
     memcpy(y->values + y->count_keys, z->values, (t - 1) * sizeof(*y->values));
@@ -183,11 +183,11 @@ void btree_node_rotate_left(BTree_Node *x, int i) {
     x->keys[i] = z->keys[0];
     x->values[i] = z->keys[0];
 
-    memmove(z->keys, z->keys + 1, z->count_keys * sizeof(*z->keys));
-    memmove(z->values, z->values + 1, z->count_keys * sizeof(*z->values));
+    memmove(z->keys, z->keys + 1, (z->count_keys - 1) * sizeof(*z->keys));
+    memmove(z->values, z->values + 1, (z->count_keys - 1) * sizeof(*z->values));
 
     if (!z->is_leaf)
-        memmove(z->children, z->children + 1, (z->count_keys + 1) * sizeof(*z->children));
+        memmove(z->children, z->children + 1, z->count_keys * sizeof(*z->children));
 
     z->count_keys--;
 }
