@@ -3,73 +3,51 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void swap(int *pX, int *pY) {
-    int temp = *pX;
-    *pX = *pY;
-    *pY = temp;
-}
+int main(int argc, char **argv) {
+    if (argc < 2)
+        return 1;
 
-void shuffle(int *vec, int len) {
-    for (int i = 0; i < len; i++) {
-        int j = rand() % (i + 1);
-        swap(vec + i, vec + j);
-    }
-}
+    const int t = atoi(argv[1]);
 
-int btree_node_validate(BTree *btree, BTree_Node *node) {
-    if (!btree->root && !(btree->t - 1 <= node->count_keys && node->count_keys <= btree->M - 1))
-        return 0;
+    if (t < 2)
+        return 1;
 
-    for (int i = 1; i < node->count_keys; i++) {
-        if (node->keys[i] <= node->keys[i - 1])
-            return 0;
-    }
+    BTree *btree = btree_init(t);
+    char op = '\0';
 
-    if (!node->is_leaf)
-        for (int i = 0; i <= node->count_keys; i++) {
-            if (!btree_node_validate(btree, node->children[i]))
-                return 0;
+    while (1) {
+        scanf("%c", &op);
+
+        if (op == 'Q')
+            break;
+
+        if (op == 'I') {
+            int key, value;
+            scanf("%d %d", &key, &value);
+            btree_insert(btree, key, value);
+            continue;
         }
 
-    return 1;
-}
+        if (op == 'S') {
+            int key, value;
+            scanf("%d", &key);
+            int hit = btree_search(btree, key, &value);
+            printf("%d %d\n", hit, value);
+            continue;
+        }
 
-int btree_validate(BTree *btree) {
-    return btree_node_validate(btree, btree->root);
-}
+        if (op == 'D') {
+            int key;
+            scanf("%d", &key);
+            btree_delete(btree, key);
+            continue;
+        }
 
-int main(int argc, char **argv) {
-    srand(42);
-    BTree *btree = btree_init(5);
-
-    int len = 1000;
-    int *keys = malloc(len * sizeof(*keys));
-    int *removed = malloc((len + 1) * sizeof(*removed));
-
-    for (int i = 0; i < len; i++) {
-        keys[i] = i + 1;
-        removed[i] = 0;
-    }
-
-    removed[len] = 0;
-
-    shuffle(keys, len);
-
-    for (int i = 0; i < len; i++)
-        btree_insert(btree, keys[i], keys[i]);
-
-    btree_display(btree);
-    printf("\n");
-
-    for (int i = 0; i < len; i++) {
-        int key = keys[i];
-        btree_delete(btree, key);
-        btree_display(btree);
+        if (op == 'P')
+            btree_display(btree);
     }
 
     btree = btree_destroy(btree);
-    free(keys);
-    free(removed);
 
     return 0;
 }
