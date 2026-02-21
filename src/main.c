@@ -40,9 +40,9 @@ int btree_validate(BTree *btree) {
 
 int main(int argc, char **argv) {
     srand(42);
-    BTree *btree = btree_init(2);
+    BTree *btree = btree_init(5);
 
-    int len = 100;
+    int len = 1000;
     int *keys = malloc(len * sizeof(*keys));
     int *removed = malloc((len + 1) * sizeof(*removed));
 
@@ -64,14 +64,12 @@ int main(int argc, char **argv) {
     for (int i = 0; i < len; i++) {
         int key = keys[i];
         btree_delete(btree, key);
-        if (!btree_validate(btree))
-            printf("ÁRVORE B FICOU INVÁLIDA APÓS DELEÇÃO DA CHAVE %d!\n", key);
-        printf("\nÁRVORE B APÓS REMOÇÃO DA CHAVE %d\n", key);
         btree_display(btree);
     }
 
     btree = btree_destroy(btree);
     free(keys);
+    free(removed);
 
     return 0;
 }
