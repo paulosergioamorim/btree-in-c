@@ -7,12 +7,15 @@ int main(int argc, char **argv) {
     if (argc < 2)
         return 1;
 
-    const int t = atoi(argv[1]);
+    char *path = argv[1];
+    BTree *btree;
 
-    if (t < 2)
-        return 1;
+    if (argc > 2) {
+        int t = atoi(argv[2]);
+        btree = btree_init_from_memory(path, t);
+    } else
+        btree = btree_init_from_db(path);
 
-    BTree *btree = btree_init(t);
     char op = '\0';
 
     while (1) {

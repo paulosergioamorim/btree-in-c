@@ -54,6 +54,7 @@ int btree_node_delete(BTree *btree, BTree_Node *node, int key) {
             node->keys[i] = pred.key;
             node->values[i] = pred.value;
             hit = btree_node_delete(btree, y, pred.key);
+            btree_node_write(btree, node);
             btree_node_destroy(y);
             return hit;
         }
@@ -66,6 +67,7 @@ int btree_node_delete(BTree *btree, BTree_Node *node, int key) {
             node->keys[i] = post.key;
             node->values[i] = post.value;
             int hit = btree_node_delete(btree, z, post.key);
+            btree_node_write(btree, node);
             btree_node_destroy(z);
             return hit;
         }

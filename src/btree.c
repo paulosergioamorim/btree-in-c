@@ -6,6 +6,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define METADATA_SIZE(btree)                                                                                           \
+    (sizeof(btree->t) + sizeof(btree->count_nodes) + sizeof(btree->next_offset) + sizeof(btree->root->offset))
+
+#define NODE_SIZE(btree)                                                                                               \
+    (sizeof(btree->root->offset) + sizeof(btree->root->is_leaf) + sizeof(btree->root->count_keys) +                    \
+     (btree->M - 1) * (sizeof(*btree->root->keys) + sizeof(*btree->root->values)) +                                    \
+     btree->M * sizeof(*btree->root->children))
+
 BTree_Node *btree_append_node(BTree *btree);
 
 int btree_node_search(BTree *btree, BTree_Node *x, int key, int *value);
@@ -16,17 +24,32 @@ void btree_node_insert_nonfull(BTree *btree, BTree_Node *x, int key, int value);
 
 BTree_Node *btree_node_read(BTree *btree, int offset);
 
-BTree *btree_init(int t) {
+BTree *btree_init_from_db(char *path) {
+    BTree *btree = malloc(sizeof(*btree));
+    assert(btree);
+    btree->fp = fopen(path, "rb+");
+    assert(btree->fp);
+    int root_offset = 0;
+    fread(&btree->t, sizeof(btree->t), 1, btree->fp);
+    btree->M = 2 * btree->t;
+    fread(&btree->count_nodes, sizeof(btree->count_nodes), 1, btree->fp);
+    fread(&btree->next_offset, sizeof(btree->next_offset), 1, btree->fp);
+    fread(&root_offset, sizeof(root_offset), 1, btree->fp);
+    btree->root = btree_node_read(btree, root_offset);
+    btree->size_node = NODE_SIZE(btree);
+    return btree;
+}
+
+BTree *btree_init_from_memory(char *path, int t) {
     BTree *btree = malloc(sizeof(*btree));
     assert(btree);
     btree->t = t;
     btree->M = 2 * t;
     btree->count_nodes = 0;
-    btree->next_offset = 0;
-    btree->size_node = sizeof(btree->root->offset) + sizeof(btree->root->is_leaf) + sizeof(btree->root->count_keys) +
-                       (btree->M - 1) * (sizeof(*btree->root->keys) + sizeof(*btree->root->values)) +
-                       btree->M * sizeof(*btree->root->children);
-    btree->fp = fopen("btree.db", "wb+");
+    btree->next_offset = METADATA_SIZE(btree);
+    btree->size_node = NODE_SIZE(btree);
+    btree->fp = fopen(path, "wb+");
+    btree->root = NULL;
     btree->root = btree_append_node(btree);
     assert(btree->fp);
     return btree;
@@ -57,6 +80,8 @@ int btree_delete(BTree *btree, int key) {
 
 BTree *btree_destroy(BTree *btree) {
     assert(btree);
+    btree_node_write(btree, btree->root);
+    btree_write_metadata(btree);
     btree->root = btree_node_destroy(btree->root);
     fclose(btree->fp);
     free(btree);
@@ -105,11 +130,11 @@ BTree_Node *btree_append_node(BTree *btree) {
     assert(node);
     node->is_leaf = 1;
     node->count_keys = 0;
-    node->keys = malloc((btree->M - 1) * sizeof(*node->keys));
+    node->keys = calloc((btree->M - 1), sizeof(*node->keys));
     assert(node->keys);
-    node->values = malloc((btree->M - 1) * sizeof(*node->values));
+    node->values = calloc((btree->M - 1), sizeof(*node->values));
     assert(node->values);
-    node->children = malloc(btree->M * sizeof(*node->children));
+    node->children = calloc(btree->M, sizeof(*node->children));
     assert(node->children);
     btree->count_nodes++;
     btree_node_write(btree, node);
@@ -279,4 +304,13 @@ void btree_node_write(BTree *btree, BTree_Node *node) {
     fwrite(node->keys, sizeof(*node->keys), btree->M - 1, btree->fp);
     fwrite(node->values, sizeof(*node->values), btree->M - 1, btree->fp);
     fwrite(node->children, sizeof(*node->children), btree->M, btree->fp);
+}
+
+void btree_write_metadata(BTree *btree) {
+    fseek(btree->fp, 0, SEEK_SET);
+    fwrite(&btree->t, sizeof(btree->t), 1, btree->fp);
+    fwrite(&btree->count_nodes, sizeof(btree->count_nodes), 1, btree->fp);
+    fwrite(&btree->next_offset, sizeof(btree->next_offset), 1, btree->fp);
+    if (btree->root)
+        fwrite(&btree->root->offset, sizeof(btree->root->offset), 1, btree->fp);
 }

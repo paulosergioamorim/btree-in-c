@@ -23,7 +23,9 @@ typedef struct btree {
     BTree_Node *root;
 } BTree;
 
-BTree *btree_init(int t);
+BTree *btree_init_from_db(char *path);
+
+BTree *btree_init_from_memory(char *path, int t);
 
 int btree_search(BTree *btree, int key, int *value);
 
@@ -38,5 +40,7 @@ void btree_display(BTree *btree);
 BTree_Node *btree_node_read_child(BTree *btree, BTree_Node *node, int i);
 
 void btree_node_write(BTree *btree, BTree_Node *node);
+
+void btree_write_metadata(BTree *btree);
 
 BTree_Node *btree_node_destroy(BTree_Node *node);
