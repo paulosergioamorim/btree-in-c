@@ -8,13 +8,13 @@
 
 BTree_Node *btree_append_node(BTree *btree);
 
-int btree_node_search(BTree_Node *x, int key, int *value);
+int btree_node_search(BTree *btree, BTree_Node *x, int key, int *value);
 
 void btree_node_split_child(BTree *btree, BTree_Node *x, int i);
 
 void btree_node_insert_nonfull(BTree *btree, BTree_Node *x, int key, int value);
 
-BTree_Node *btree_node_destroy(BTree_Node *node);
+BTree_Node *btree_node_read(BTree *btree, int offset);
 
 BTree *btree_init(int t) {
     BTree *btree = malloc(sizeof(*btree));
@@ -22,12 +22,18 @@ BTree *btree_init(int t) {
     btree->t = t;
     btree->M = 2 * t;
     btree->count_nodes = 0;
+    btree->next_offset = 0;
+    btree->size_node = sizeof(btree->root->offset) + sizeof(btree->root->is_leaf) + sizeof(btree->root->count_keys) +
+                       (btree->M - 1) * (sizeof(*btree->root->keys) + sizeof(*btree->root->values)) +
+                       btree->M * sizeof(*btree->root->children);
+    btree->fp = fopen("btree.db", "wb+");
     btree->root = btree_append_node(btree);
+    assert(btree->fp);
     return btree;
 }
 
 int btree_search(BTree *btree, int key, int *value) {
-    return btree_node_search(btree->root, key, value);
+    return btree_node_search(btree, btree->root, key, value);
 }
 
 void btree_insert(BTree *btree, int key, int value) {
@@ -39,7 +45,7 @@ void btree_insert(BTree *btree, int key, int value) {
     BTree_Node *s = btree_append_node(btree);
     s->is_leaf = 0;
     s->count_keys = 0;
-    s->children[0] = btree->root;
+    s->children[0] = btree->root->offset;
     btree->root = s;
     btree_node_split_child(btree, s, 0);
     btree_node_insert_nonfull(btree, s, key, value);
@@ -52,6 +58,7 @@ int btree_delete(BTree *btree, int key) {
 BTree *btree_destroy(BTree *btree) {
     assert(btree);
     btree->root = btree_node_destroy(btree->root);
+    fclose(btree->fp);
     free(btree);
     return NULL;
 }
@@ -59,9 +66,9 @@ BTree *btree_destroy(BTree *btree) {
 BTree_Node *btree_node_destroy(BTree_Node *node) {
     assert(node);
 
-    if (!node->is_leaf)
-        for (int i = 0; i <= node->count_keys; i++)
-            node->children[i] = btree_node_destroy(node->children[i]);
+    // if (!node->is_leaf)
+    //     for (int i = 0; i <= node->count_keys; i++)
+    //         node->children[i] = btree_node_destroy(node->children[i]);
 
     free(node->keys);
     free(node->values);
@@ -70,7 +77,7 @@ BTree_Node *btree_node_destroy(BTree_Node *node) {
     return NULL;
 }
 
-int btree_node_search(BTree_Node *x, int key, int *value) {
+int btree_node_search(BTree *btree, BTree_Node *x, int key, int *value) {
     int i = 0;
 
     while (i < x->count_keys && key > x->keys[i])
@@ -84,11 +91,17 @@ int btree_node_search(BTree_Node *x, int key, int *value) {
     if (x->is_leaf)
         return 0;
 
-    return btree_node_search(x->children[i], key, value);
+    BTree_Node *x_ci = btree_node_read_child(btree, x, i);
+
+    int hit = btree_node_search(btree, x_ci, key, value);
+    btree_node_destroy(x_ci);
+    return hit;
 }
 
 BTree_Node *btree_append_node(BTree *btree) {
     BTree_Node *node = malloc(sizeof(*node));
+    node->offset = btree->next_offset;
+    btree->next_offset += btree->size_node;
     assert(node);
     node->is_leaf = 1;
     node->count_keys = 0;
@@ -99,6 +112,7 @@ BTree_Node *btree_append_node(BTree *btree) {
     node->children = malloc(btree->M * sizeof(*node->children));
     assert(node->children);
     btree->count_nodes++;
+    btree_node_write(btree, node);
     return node;
 }
 
@@ -107,7 +121,7 @@ void btree_node_split_child(BTree *btree, BTree_Node *x, int i) {
     BTree_Node *y = NULL;
     int t = btree->t;
 
-    y = x->children[i];
+    y = btree_node_read_child(btree, x, i);
     z->is_leaf = y->is_leaf;
     z->count_keys = t - 1;
 
@@ -121,7 +135,7 @@ void btree_node_split_child(BTree *btree, BTree_Node *x, int i) {
 
     memmove(x->children + i + 1, x->children + i, (x->count_keys - i + 1) * sizeof(*x->children));
 
-    x->children[i + 1] = z;
+    x->children[i + 1] = z->offset;
 
     memmove(x->keys + i + 1, x->keys + i, (x->count_keys - i) * sizeof(*x->keys));
     memmove(x->values + i + 1, x->values + i, (x->count_keys - i) * sizeof(*x->values));
@@ -129,6 +143,12 @@ void btree_node_split_child(BTree *btree, BTree_Node *x, int i) {
     x->keys[i] = y->keys[t - 1];
     x->values[i] = y->values[t - 1];
     x->count_keys++;
+
+    btree_node_write(btree, x);
+    btree_node_write(btree, y);
+    btree_node_write(btree, z);
+    btree_node_destroy(y);
+    btree_node_destroy(z);
 }
 
 void btree_node_insert_nonfull(BTree *btree, BTree_Node *x, int key, int value) {
@@ -144,6 +164,7 @@ void btree_node_insert_nonfull(BTree *btree, BTree_Node *x, int key, int value) 
         x->keys[i + 1] = key;
         x->values[i + 1] = value;
         x->count_keys++;
+        btree_node_write(btree, x);
         return;
     }
 
@@ -152,8 +173,11 @@ void btree_node_insert_nonfull(BTree *btree, BTree_Node *x, int key, int value) 
 
     i++;
 
-    if (x->children[i]->count_keys < btree->M - 1) {
-        btree_node_insert_nonfull(btree, x->children[i], key, value);
+    BTree_Node *x_ci = btree_node_read_child(btree, x, i);
+
+    if (x_ci->count_keys < btree->M - 1) {
+        btree_node_insert_nonfull(btree, x_ci, key, value);
+        btree_node_destroy(x_ci);
         return;
     }
 
@@ -162,16 +186,38 @@ void btree_node_insert_nonfull(BTree *btree, BTree_Node *x, int key, int value) 
     if (key > x->keys[i])
         i++;
 
-    btree_node_insert_nonfull(btree, x->children[i], key, value);
+    btree_node_insert_nonfull(btree, x_ci, key, value);
+    btree_node_destroy(x_ci);
 }
 
 void btree_display(BTree *btree) {
+    int last_level_offset = btree->root->offset;
+
+    printf("[ ");
+
+    for (int i = 0; i < btree->root->count_keys; i++)
+        printf("%d ", btree->root->keys[i]);
+
+    printf("] ");
+
+    if (btree->root->is_leaf) {
+        printf("\n");
+        return;
+    }
+
     BTree_Queue *queue = btree_queue_init(btree->count_nodes);
-    BTree_Node *last_level_node = btree->root;
-    btree_queue_enqueue(queue, btree->root);
+
+    if (btree->root->offset == last_level_offset) {
+        last_level_offset = btree->root->children[btree->root->count_keys];
+        printf("\n");
+    }
+
+    for (int i = 0; i <= btree->root->count_keys; i++)
+        btree_queue_enqueue(queue, btree->root->children[i]);
 
     while (!btree_queue_is_empty(queue)) {
-        BTree_Node *node = btree_queue_dequeue(queue);
+        int offset = btree_queue_dequeue(queue);
+        BTree_Node *node = btree_node_read(btree, offset);
         printf("[ ");
 
         for (int i = 0; i < node->count_keys; i++)
@@ -179,17 +225,58 @@ void btree_display(BTree *btree) {
 
         printf("] ");
 
-        if (node == last_level_node) {
-            last_level_node = node->children[node->count_keys];
+        if (offset == last_level_offset) {
+            last_level_offset = node->children[node->count_keys];
             printf("\n");
         }
 
-        if (node->is_leaf)
+        if (node->is_leaf) {
+            btree_node_destroy(node);
             continue;
+        }
 
         for (int i = 0; i <= node->count_keys; i++)
             btree_queue_enqueue(queue, node->children[i]);
+
+        btree_node_destroy(node);
     }
 
     queue = btree_queue_destroy(queue);
+}
+
+BTree_Node *btree_node_read(BTree *btree, int offset) {
+    assert(0 <= offset && offset < btree->next_offset);
+    fseek(btree->fp, offset, SEEK_SET);
+    BTree_Node *node = malloc(sizeof(*node));
+    assert(node);
+    node->keys = malloc((btree->M - 1) * sizeof(*node->keys));
+    assert(node->keys);
+    node->values = malloc((btree->M - 1) * sizeof(*node->values));
+    assert(node->values);
+    node->children = malloc(btree->M * sizeof(*node->children));
+    assert(node->children);
+    fread(&node->offset, sizeof(node->offset), 1, btree->fp);
+    fread(&node->is_leaf, sizeof(node->is_leaf), 1, btree->fp);
+    fread(&node->count_keys, sizeof(node->count_keys), 1, btree->fp);
+    fread(node->keys, sizeof(*node->keys), btree->M - 1, btree->fp);
+    fread(node->values, sizeof(*node->values), btree->M - 1, btree->fp);
+    fread(node->children, sizeof(*node->children), btree->M, btree->fp);
+    return node;
+}
+
+BTree_Node *btree_node_read_child(BTree *btree, BTree_Node *node, int i) {
+    int offset = node->children[i];
+    return btree_node_read(btree, offset);
+}
+
+void btree_node_write(BTree *btree, BTree_Node *node) {
+    int offset = node->offset;
+    assert(0 <= offset && offset < btree->next_offset);
+    fseek(btree->fp, offset, SEEK_SET);
+    fwrite(&node->offset, sizeof(node->offset), 1, btree->fp);
+    fwrite(&node->is_leaf, sizeof(node->is_leaf), 1, btree->fp);
+    fwrite(&node->count_keys, sizeof(node->count_keys), 1, btree->fp);
+    fwrite(node->keys, sizeof(*node->keys), btree->M - 1, btree->fp);
+    fwrite(node->values, sizeof(*node->values), btree->M - 1, btree->fp);
+    fwrite(node->children, sizeof(*node->children), btree->M, btree->fp);
 }

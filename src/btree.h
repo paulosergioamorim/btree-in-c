@@ -1,19 +1,25 @@
 #pragma once
 
+#include <stdio.h>
+
 typedef struct btree_node BTree_Node;
 
 struct btree_node {
+    int offset;
     int count_keys;
     int is_leaf;
     int *keys;
     int *values;
-    BTree_Node **children;
+    int *children;
 };
 
 typedef struct btree {
     int t;
     int M;
     int count_nodes;
+    int size_node;
+    int next_offset;
+    FILE *fp;
     BTree_Node *root;
 } BTree;
 
@@ -28,3 +34,9 @@ int btree_delete(BTree *btree, int key);
 BTree *btree_destroy(BTree *btree);
 
 void btree_display(BTree *btree);
+
+BTree_Node *btree_node_read_child(BTree *btree, BTree_Node *node, int i);
+
+void btree_node_write(BTree *btree, BTree_Node *node);
+
+BTree_Node *btree_node_destroy(BTree_Node *node);
