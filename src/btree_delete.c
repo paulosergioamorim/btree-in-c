@@ -53,8 +53,8 @@ int btree_node_delete(BTree *btree, BTree_Node *node, int key) {
             KV pred = btree_node_get_pred(btree, node, i);
             node->keys[i] = pred.key;
             node->values[i] = pred.value;
-            hit = btree_node_delete(btree, y, pred.key);
             btree_node_write(btree, node);
+            hit = btree_node_delete(btree, y, pred.key);
             btree_node_destroy(y);
             return hit;
         }
@@ -66,8 +66,8 @@ int btree_node_delete(BTree *btree, BTree_Node *node, int key) {
             KV post = btree_node_get_post(btree, node, i);
             node->keys[i] = post.key;
             node->values[i] = post.value;
-            int hit = btree_node_delete(btree, z, post.key);
             btree_node_write(btree, node);
+            int hit = btree_node_delete(btree, z, post.key);
             btree_node_destroy(z);
             return hit;
         }
@@ -149,6 +149,7 @@ BTree_Node *btree_node_merge(BTree *btree, BTree_Node *x, int i, int t) {
     z = btree_poll_node(btree, z);
 
     btree_node_write(btree, y);
+    btree_node_write(btree, x);
     btree_node_destroy(y);
 
     if (btree->root == x && x->count_keys == 0) {
@@ -157,7 +158,6 @@ BTree_Node *btree_node_merge(BTree *btree, BTree_Node *x, int i, int t) {
         return s;
     }
 
-    btree_node_write(btree, x);
     return btree->root;
 }
 
@@ -191,6 +191,12 @@ int btree_node_redistribute(BTree *btree, BTree_Node *x, int i, int t) {
         return 1;
     }
 
+    if (sibbling_right)
+        btree_node_destroy(sibbling_right);
+
+    if (sibbling_left)
+        btree_node_destroy(sibbling_left);
+
     return 0;
 }
 
@@ -199,6 +205,7 @@ BTree_Node *btree_node_concatenate(BTree *btree, BTree_Node *x, BTree_Node *x_ci
 
     if (sibbling_left) {
         btree->root = btree_node_merge(btree, x, i - 1, t);
+        btree_node_destroy(x_ci);
         return sibbling_left;
     }
 

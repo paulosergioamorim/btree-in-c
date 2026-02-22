@@ -60,6 +60,11 @@ int btree_search(BTree *btree, int key, int *value) {
 }
 
 void btree_insert(BTree *btree, int key, int value) {
+    int search_value;
+
+    if (btree_search(btree, key, &search_value))
+        return;
+
     if (btree->root->count_keys < btree->M - 1) {
         btree_node_insert_nonfull(btree, btree->root, key, value);
         return;
@@ -69,6 +74,7 @@ void btree_insert(BTree *btree, int key, int value) {
     s->is_leaf = 0;
     s->count_keys = 0;
     s->children[0] = btree->root->offset;
+    btree_node_destroy(btree->root);
     btree->root = s;
     btree_node_split_child(btree, s, 0);
     btree_node_insert_nonfull(btree, s, key, value);
@@ -211,6 +217,8 @@ void btree_node_insert_nonfull(BTree *btree, BTree_Node *x, int key, int value) 
     if (key > x->keys[i])
         i++;
 
+    btree_node_destroy(x_ci);
+    x_ci = btree_node_read_child(btree, x, i);
     btree_node_insert_nonfull(btree, x_ci, key, value);
     btree_node_destroy(x_ci);
 }
