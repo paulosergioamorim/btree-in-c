@@ -72,7 +72,6 @@ int btree_node_delete(BTree *btree, BTree_Node *node, int key) {
             return hit;
         }
 
-        btree_node_destroy(z);
         btree->root = btree_node_merge(btree, node, y, z, i, t);
         hit = btree_node_delete(btree, y, key);
         btree_node_destroy(y);
