@@ -16,7 +16,7 @@ BTree_Node *btree_append_node(BTree *btree);
 
 int btree_node_search(BTree *btree, BTree_Node *x, int key, int *value);
 
-void btree_node_split_child(BTree *btree, BTree_Node *x, int i);
+void btree_node_split_child(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int i);
 
 void btree_node_insert_nonfull(BTree *btree, BTree_Node *x, int key, int value);
 
@@ -76,8 +76,8 @@ void btree_insert(BTree *btree, int key, int value) {
     s->count_keys = 0;
     s->children[0] = btree->root->offset;
     btree_node_destroy(btree->root);
+    btree_node_split_child(btree, s, btree->root, 0);
     btree->root = s;
-    btree_node_split_child(btree, s, 0);
     btree_node_insert_nonfull(btree, s, key, value);
     btree_write_header(btree);
 }
@@ -154,9 +154,8 @@ BTree_Node *btree_append_node(BTree *btree) {
     return node;
 }
 
-void btree_node_split_child(BTree *btree, BTree_Node *x, int i) {
+void btree_node_split_child(BTree *btree, BTree_Node *x, BTree_Node *y, int i) {
     BTree_Node *z = btree_append_node(btree);
-    BTree_Node *y = NULL;
     int t = btree->t;
 
     y = btree_node_read_child(btree, x, i);
@@ -185,7 +184,6 @@ void btree_node_split_child(BTree *btree, BTree_Node *x, int i) {
     btree_node_write(btree, x);
     btree_node_write(btree, y);
     btree_node_write(btree, z);
-    btree_node_destroy(y);
     btree_node_destroy(z);
 }
 
@@ -219,13 +217,14 @@ void btree_node_insert_nonfull(BTree *btree, BTree_Node *x, int key, int value) 
         return;
     }
 
-    btree_node_split_child(btree, x, i);
+    btree_node_split_child(btree, x, x_ci, i);
 
-    if (key > x->keys[i])
+    if (key > x->keys[i]) {
+        btree_node_destroy(x_ci);
+        x_ci = btree_node_read_child(btree, x, i);
         i++;
+    }
 
-    btree_node_destroy(x_ci);
-    x_ci = btree_node_read_child(btree, x, i);
     btree_node_insert_nonfull(btree, x_ci, key, value);
     btree_node_destroy(x_ci);
 }
