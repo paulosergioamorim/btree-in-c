@@ -35,7 +35,7 @@ int main(int argc, char **argv) {
             int key, value;
             scanf("%d", &key);
             int hit = btree_search(btree, key, &value);
-            printf("%s %d\n", hit ? "HIT" : "MISS", value);
+            printf("%s %d\n", hit ? "HIT VALUE" : "MISS KEY", hit ? value : key);
             continue;
         }
 
