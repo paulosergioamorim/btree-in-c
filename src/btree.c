@@ -33,6 +33,7 @@ BTree *btree_init_from_db(char *path) {
     fread(&btree->count_nodes, sizeof(btree->count_nodes), 1, btree->fp);
     fread(&btree->next_offset, sizeof(btree->next_offset), 1, btree->fp);
     fread(&root_offset, sizeof(root_offset), 1, btree->fp);
+    fread(&btree->next_free, sizeof(btree->next_free), 1, btree->fp);
     btree->root = btree_node_read(btree, root_offset);
     btree->size_node = btree_get_node_size(btree);
     return btree;
@@ -47,6 +48,7 @@ BTree *btree_init_from_memory(char *path, int t) {
     btree->next_offset = btree_get_header_size(btree);
     btree->size_node = btree_get_node_size(btree);
     btree->fp = fopen(path, "wb+");
+    btree->next_free = -1;
     btree->root = btree_append_node(btree);
     btree_write_header(btree);
     assert(btree->fp);
@@ -122,11 +124,23 @@ int btree_node_search(BTree *btree, BTree_Node *x, int key, int *value) {
     return hit;
 }
 
+int btree_pop_free_offset(BTree *btree) {
+    if (btree->next_free == -1) {
+        int offset = btree->next_offset;
+        btree->next_offset += btree->size_node;
+        return offset;
+    }
+
+    int offset = btree->next_free;
+    fseek(btree->fp, btree->next_free, SEEK_SET);
+    fread(&btree->next_free, sizeof(btree->next_free), 1, btree->fp);
+    return offset;
+}
+
 BTree_Node *btree_append_node(BTree *btree) {
     BTree_Node *node = malloc(sizeof(*node));
-    node->offset = btree->next_offset;
-    btree->next_offset += btree->size_node;
     assert(node);
+    node->offset = btree_pop_free_offset(btree);
     node->is_leaf = 1;
     node->count_keys = 0;
     node->keys = calloc((btree->M - 1), sizeof(*node->keys));
@@ -316,6 +330,7 @@ void btree_write_header(BTree *btree) {
     fwrite(&btree->count_nodes, sizeof(btree->count_nodes), 1, btree->fp);
     fwrite(&btree->next_offset, sizeof(btree->next_offset), 1, btree->fp);
     fwrite(&btree->root->offset, sizeof(btree->root->offset), 1, btree->fp);
+    fwrite(&btree->next_free, sizeof(btree->next_free), 1, btree->fp);
 }
 
 int btree_get_node_size(BTree *btree) {
@@ -325,5 +340,6 @@ int btree_get_node_size(BTree *btree) {
 }
 
 int btree_get_header_size(BTree *btree) {
-    return sizeof(btree->t) + sizeof(btree->count_nodes) + sizeof(btree->next_offset) + sizeof(btree->root->offset);
+    return sizeof(btree->t) + sizeof(btree->count_nodes) + sizeof(btree->next_offset) + sizeof(btree->root->offset) +
+           sizeof(btree->next_free);
 }

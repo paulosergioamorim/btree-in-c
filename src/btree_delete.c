@@ -1,5 +1,6 @@
 #include "btree.h"
 #include <assert.h>
+#include <stdio.h>
 #include <string.h>
 
 typedef struct kv {
@@ -28,6 +29,8 @@ void btree_node_rotate_left(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_No
  * Rotação à direita em torno da i-ésima chave de x.
  */
 void btree_node_rotate_right(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_Node *z, int i);
+
+void btree_push_free_offset(BTree *btree, int offset);
 
 int btree_node_delete(BTree *btree, BTree_Node *node, int key) {
     int i = 0;
@@ -146,6 +149,12 @@ KV btree_node_get_post(BTree *btree, BTree_Node *node, int i) {
     return kv;
 }
 
+void btree_push_free_offset(BTree *btree, int offset) {
+    fseek(btree->fp, offset, SEEK_SET);
+    fwrite(&btree->next_free, sizeof(btree->next_free), 1, btree->fp);
+    btree->next_free = offset;
+}
+
 void btree_node_merge(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_Node *z, int i, int t) {
     y->keys[y->count_keys] = x->keys[i];
     y->values[y->count_keys] = x->values[i];
@@ -161,6 +170,7 @@ void btree_node_merge(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_Node *z,
         memcpy(y->children + y->count_keys, z->children, t * sizeof(*y->children));
 
     y->count_keys = 2 * t - 1;
+    btree_push_free_offset(btree, z->offset);
     btree_node_destroy(z);
     btree->count_nodes--;
 
@@ -168,6 +178,7 @@ void btree_node_merge(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_Node *z,
     btree_node_write(btree, x);
 
     if (btree->root == x && x->count_keys == 0) {
+        btree_push_free_offset(btree, x->offset);
         btree_node_destroy(x);
         btree->count_nodes--;
         btree->root = y;

@@ -19,6 +19,7 @@ typedef struct btree {
     int count_nodes;
     int size_node;
     int next_offset;
+    int next_free;
     FILE *fp;
     BTree_Node *root;
 } BTree;
