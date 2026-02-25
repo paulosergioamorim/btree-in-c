@@ -33,7 +33,7 @@ void btree_insert(BTree *btree, int key, int value);
 
 int btree_delete(BTree *btree, int key);
 
-BTree *btree_destroy(BTree *btree);
+void btree_destroy(BTree *btree);
 
 void btree_display(BTree *btree);
 
@@ -41,6 +41,4 @@ BTree_Node *btree_node_read_child(BTree *btree, BTree_Node *node, int i);
 
 void btree_node_write(BTree *btree, BTree_Node *node);
 
-void btree_write_metadata(BTree *btree);
-
-BTree_Node *btree_node_destroy(BTree_Node *node);
+void btree_node_destroy(BTree_Node *node);

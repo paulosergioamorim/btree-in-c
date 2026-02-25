@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
             btree_display(btree);
     }
 
-    btree = btree_destroy(btree);
+    btree_destroy(btree);
 
     return 0;
 }

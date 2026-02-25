@@ -1,6 +1,5 @@
 #include "btree.h"
 #include <assert.h>
-#include <stdlib.h>
 #include <string.h>
 
 typedef struct kv {
@@ -12,13 +11,13 @@ KV btree_node_get_pred(BTree *btree, BTree_Node *node, int i);
 
 KV btree_node_get_post(BTree *btree, BTree_Node *node, int i);
 
-BTree_Node *btree_poll_node(BTree *btree, BTree_Node *node);
+void btree_node_merge(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_Node *z, int i, int t);
 
-BTree_Node *btree_node_merge(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_Node *z, int i, int t);
+int btree_node_redistribute(BTree *btree, BTree_Node *x, BTree_Node *x_ci, BTree_Node *sibbling_left,
+                            BTree_Node *sibbling_right, int i, int t);
 
-int btree_node_redistribute(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int i, int t);
-
-BTree_Node *btree_node_concatenate(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int i, int t);
+BTree_Node *btree_node_concatenate(BTree *btree, BTree_Node *x, BTree_Node *x_ci, BTree_Node *sibbling_left,
+                                   BTree_Node *sibbling_right, int i, int t);
 
 /**
  * Rotação à esquerda em torno da i-ésima chave de x.
@@ -72,9 +71,12 @@ int btree_node_delete(BTree *btree, BTree_Node *node, int key) {
             return hit;
         }
 
-        btree->root = btree_node_merge(btree, node, y, z, i, t);
+        btree_node_merge(btree, node, y, z, i, t);
         hit = btree_node_delete(btree, y, key);
-        btree_node_destroy(y);
+
+        if (btree->root != y)
+            btree_node_destroy(y);
+
         return hit;
     }
 
@@ -83,21 +85,34 @@ int btree_node_delete(BTree *btree, BTree_Node *node, int key) {
 
     BTree_Node *x_ci = btree_node_read_child(btree, node, i);
 
-    if (x_ci->count_keys > t - 1)
+    if (x_ci->count_keys > t - 1) {
         hit = btree_node_delete(btree, x_ci, key);
 
-    else if (btree_node_redistribute(btree, node, x_ci, i, t)) {
-        x_ci = btree_node_destroy(x_ci);
-        x_ci = btree_node_read_child(btree, node, i);
+        if (btree->root != x_ci)
+            btree_node_destroy(x_ci);
+
+        return hit;
+    }
+
+    BTree_Node *sibbling_left = btree_node_read_child(btree, node, i - 1);
+    BTree_Node *sibbling_right = btree_node_read_child(btree, node, i + 1);
+
+    if (btree_node_redistribute(btree, node, x_ci, sibbling_left, sibbling_right, i, t)) {
+        if (sibbling_left)
+            btree_node_destroy(sibbling_left);
+        if (sibbling_right)
+            btree_node_destroy(sibbling_right);
         hit = btree_node_delete(btree, x_ci, key);
     }
 
     else {
-        x_ci = btree_node_concatenate(btree, node, x_ci, i, t);
+        x_ci = btree_node_concatenate(btree, node, x_ci, sibbling_left, sibbling_right, i, t);
         hit = btree_node_delete(btree, x_ci, key);
     }
 
-    btree_node_destroy(x_ci);
+    if (btree->root != x_ci)
+        btree_node_destroy(x_ci);
+
     return hit;
 }
 
@@ -131,7 +146,7 @@ KV btree_node_get_post(BTree *btree, BTree_Node *node, int i) {
     return kv;
 }
 
-BTree_Node *btree_node_merge(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_Node *z, int i, int t) {
+void btree_node_merge(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_Node *z, int i, int t) {
     y->keys[y->count_keys] = x->keys[i];
     y->values[y->count_keys] = x->values[i];
     y->count_keys++;
@@ -146,66 +161,50 @@ BTree_Node *btree_node_merge(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_N
         memcpy(y->children + y->count_keys, z->children, t * sizeof(*y->children));
 
     y->count_keys = 2 * t - 1;
-    z = btree_poll_node(btree, z);
+    btree_node_destroy(z);
+    btree->count_nodes--;
 
     btree_node_write(btree, y);
     btree_node_write(btree, x);
 
     if (btree->root == x && x->count_keys == 0) {
-        BTree_Node *s = btree_node_read_child(btree, x, 0);
-        btree_poll_node(btree, x);
-        return s;
+        btree_node_destroy(x);
+        btree->count_nodes--;
+        btree->root = y;
     }
-
-    return btree->root;
 }
 
-BTree_Node *btree_poll_node(BTree *btree, BTree_Node *node) {
-    assert(node);
-    free(node->keys);
-    free(node->values);
-    free(node->children);
-    free(node);
-    btree->count_nodes--;
-    return NULL;
-}
-
-int btree_node_redistribute(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int i, int t) {
-    BTree_Node *sibbling_left = (i > 0) ? btree_node_read_child(btree, x, i - 1) : NULL;
-
+int btree_node_redistribute(BTree *btree, BTree_Node *x, BTree_Node *x_ci, BTree_Node *sibbling_left,
+                            BTree_Node *sibbling_right, int i, int t) {
     if (sibbling_left && sibbling_left->count_keys >= t) {
-        btree_node_rotate_right(btree, x, sibbling_left, x_ci, i);
-        btree_node_destroy(sibbling_left);
+        btree_node_rotate_right(btree, x, sibbling_left, x_ci, i - 1);
         return 1;
     }
-
-    if (sibbling_left)
-        btree_node_destroy(sibbling_left);
-
-    BTree_Node *sibbling_right = (i < x->count_keys) ? btree_node_read_child(btree, x, i + 1) : NULL;
 
     if (sibbling_right && sibbling_right->count_keys >= t) {
         btree_node_rotate_left(btree, x, x_ci, sibbling_right, i);
-        btree_node_destroy(sibbling_right);
         return 1;
     }
-
-    if (sibbling_right)
-        btree_node_destroy(sibbling_right);
 
     return 0;
 }
 
-BTree_Node *btree_node_concatenate(BTree *btree, BTree_Node *x, BTree_Node *x_ci, int i, int t) {
-    BTree_Node *sibbling_left = (i > 0) ? btree_node_read_child(btree, x, i - 1) : NULL;
-
+BTree_Node *btree_node_concatenate(BTree *btree, BTree_Node *x, BTree_Node *x_ci, BTree_Node *sibbling_left,
+                                   BTree_Node *sibbling_right, int i, int t) {
     if (sibbling_left) {
-        btree->root = btree_node_merge(btree, x, sibbling_left, x_ci, i - 1, t);
+        btree_node_merge(btree, x, sibbling_left, x_ci, i - 1, t);
+
+        if (sibbling_right)
+            btree_node_destroy(sibbling_right);
+
         return sibbling_left;
     }
 
-    BTree_Node *sibbling_right = btree_node_read_child(btree, x, i + 1);
-    btree->root = btree_node_merge(btree, x, x_ci, sibbling_right, i, t);
+    btree_node_merge(btree, x, x_ci, sibbling_right, i, t);
+
+    if (sibbling_left)
+        btree_node_destroy(sibbling_left);
+
     return x_ci;
 }
 

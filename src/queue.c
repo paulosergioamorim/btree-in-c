@@ -32,9 +32,8 @@ int btree_queue_dequeue(BTree_Queue *queue) {
     return offset;
 }
 
-BTree_Queue *btree_queue_destroy(BTree_Queue *queue) {
+void btree_queue_destroy(BTree_Queue *queue) {
     assert(queue);
     free(queue->buf);
     free(queue);
-    return NULL;
 }
