@@ -232,32 +232,13 @@ void btree_node_insert_nonfull(BTree *btree, BTree_Node *x, int key, int value) 
 
 void btree_display(BTree *btree) {
     int last_level_offset = btree->root->offset;
-
-    printf("[ ");
-
-    for (int i = 0; i < btree->root->count_keys; i++)
-        printf("%d ", btree->root->keys[i]);
-
-    printf("] ");
-
-    if (btree->root->is_leaf) {
-        printf("\n");
-        return;
-    }
-
     BTree_Queue *queue = btree_queue_init(btree->count_nodes);
-
-    if (btree->root->offset == last_level_offset) {
-        last_level_offset = btree->root->children[btree->root->count_keys];
-        printf("\n");
-    }
-
-    for (int i = 0; i <= btree->root->count_keys; i++)
-        btree_queue_enqueue(queue, btree->root->children[i]);
+    btree_queue_enqueue(queue, btree->root->offset);
 
     while (!btree_queue_is_empty(queue)) {
         int offset = btree_queue_dequeue(queue);
         BTree_Node *node = btree_node_read(btree, offset);
+
         printf("[ ");
 
         for (int i = 0; i < node->count_keys; i++)
