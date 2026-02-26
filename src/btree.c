@@ -180,6 +180,12 @@ void btree_node_split_child(BTree *btree, BTree_Node *x, BTree_Node *y, int i) {
     x->values[i] = y->values[t - 1];
     x->count_keys++;
 
+    memset(y->keys + y->count_keys, 0, t * sizeof(*y->keys));
+    memset(y->values + y->count_keys, 0, t * sizeof(*y->values));
+
+    if (!y->is_leaf)
+        memset(y->children + y->count_keys + 1, 0, t * sizeof(*y->children));
+
     btree_node_write(btree, x);
     btree_node_write(btree, y);
     btree_node_write(btree, z);

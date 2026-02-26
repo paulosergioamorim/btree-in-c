@@ -45,6 +45,8 @@ int btree_node_delete(BTree *btree, BTree_Node *node, int key) {
             memmove(node->keys + i, node->keys + i + 1, (node->count_keys - i - 1) * sizeof(*node->keys));
             memmove(node->values + i, node->values + i + 1, (node->count_keys - i - 1) * sizeof(*node->values));
             node->count_keys--;
+            node->keys[node->count_keys] = 0;
+            node->values[node->count_keys] = 0;
             btree_node_write(btree, node);
             return 1;
         }
@@ -150,7 +152,14 @@ KV btree_node_get_post(BTree *btree, BTree_Node *node, int i) {
 }
 
 void btree_remove_node(BTree *btree, BTree_Node *x) {
-    fseek(btree->fp, x->offset, SEEK_SET);
+    int offset = x->offset;
+    x->count_keys = 0;
+    x->is_leaf = 0;
+    memset(x->keys, 0, (btree->M - 1) * sizeof(*x->keys));
+    memset(x->values, 0, (btree->M - 1) * sizeof(*x->values));
+    memset(x->children, 0, btree->M * sizeof(*x->children));
+    btree_node_write(btree, x);
+    fseek(btree->fp, offset, SEEK_SET);
     fwrite(&btree->next_free, sizeof(btree->next_free), 1, btree->fp);
     btree->next_free = x->offset;
     btree_node_destroy(x);
@@ -237,6 +246,12 @@ void btree_node_rotate_left(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_No
         memmove(z->children, z->children + 1, z->count_keys * sizeof(*z->children));
 
     z->count_keys--;
+    z->keys[z->count_keys] = 0;
+    z->values[z->count_keys] = 0;
+
+    if (!z->is_leaf)
+        z->children[z->count_keys + 1] = 0;
+
     btree_node_write(btree, x);
     btree_node_write(btree, y);
     btree_node_write(btree, z);
@@ -260,6 +275,11 @@ void btree_node_rotate_right(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_N
     x->keys[i] = y->keys[y->count_keys - 1];
     x->values[i] = y->values[y->count_keys - 1];
     y->count_keys--;
+    y->keys[y->count_keys] = 0;
+    y->values[y->count_keys] = 0;
+
+    if (!y->is_leaf)
+        y->children[y->count_keys + 1] = 0;
 
     btree_node_write(btree, x);
     btree_node_write(btree, y);
