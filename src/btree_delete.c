@@ -15,14 +15,8 @@ int btree_node_redistribute(BTree *btree, BTree_Node *x, BTree_Node *x_ci, BTree
 BTree_Node *btree_node_concatenate(BTree *btree, BTree_Node *x, BTree_Node *x_ci, BTree_Node *sibbling_left,
                                    BTree_Node *sibbling_right, int i, int t);
 
-/**
- * Rotação à esquerda em torno da i-ésima chave de x.
- */
 void btree_node_rotate_left(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_Node *z, int i);
 
-/**
- * Rotação à direita em torno da i-ésima chave de x.
- */
 void btree_node_rotate_right(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_Node *z, int i);
 
 void btree_remove_node(BTree *btree, BTree_Node *x);
