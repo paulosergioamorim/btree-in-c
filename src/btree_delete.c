@@ -3,14 +3,9 @@
 #include <stdio.h>
 #include <string.h>
 
-typedef struct kv {
-    int key;
-    int value;
-} KV;
+Item btree_node_get_pred(BTree *btree, BTree_Node *node, int i);
 
-KV btree_node_get_pred(BTree *btree, BTree_Node *node, int i);
-
-KV btree_node_get_post(BTree *btree, BTree_Node *node, int i);
+Item btree_node_get_post(BTree *btree, BTree_Node *node, int i);
 
 void btree_node_merge(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_Node *z, int i, int t);
 
@@ -37,16 +32,14 @@ int btree_node_delete(BTree *btree, BTree_Node *node, int key) {
     int t = btree->t;
     int hit = 0;
 
-    while (i < node->count_keys && key > node->keys[i])
+    while (i < node->count_keys && key > node->buf[i].key)
         i++;
 
-    if (i < node->count_keys && key == node->keys[i]) {
+    if (i < node->count_keys && key == node->buf[i].key) {
         if (node->is_leaf) {
-            memmove(node->keys + i, node->keys + i + 1, (node->count_keys - i - 1) * sizeof(*node->keys));
-            memmove(node->values + i, node->values + i + 1, (node->count_keys - i - 1) * sizeof(*node->values));
+            memmove(node->buf + i, node->buf + i + 1, (node->count_keys - i - 1) * sizeof(*node->buf));
             node->count_keys--;
-            node->keys[node->count_keys] = 0;
-            node->values[node->count_keys] = 0;
+            node->buf[node->count_keys] = (Item){0};
             btree_node_write(btree, node);
             return 1;
         }
@@ -54,9 +47,8 @@ int btree_node_delete(BTree *btree, BTree_Node *node, int key) {
         BTree_Node *y = btree_node_read_child(btree, node, i);
 
         if (y->count_keys >= t) {
-            KV pred = btree_node_get_pred(btree, node, i);
-            node->keys[i] = pred.key;
-            node->values[i] = pred.value;
+            Item pred = btree_node_get_pred(btree, node, i);
+            node->buf[i] = pred;
             btree_node_write(btree, node);
             hit = btree_node_delete(btree, y, pred.key);
             btree_node_destroy(y);
@@ -67,9 +59,8 @@ int btree_node_delete(BTree *btree, BTree_Node *node, int key) {
 
         if (z->count_keys >= t) {
             btree_node_destroy(y);
-            KV post = btree_node_get_post(btree, node, i);
-            node->keys[i] = post.key;
-            node->values[i] = post.value;
+            Item post = btree_node_get_post(btree, node, i);
+            node->buf[i] = post;
             btree_node_write(btree, node);
             int hit = btree_node_delete(btree, z, post.key);
             btree_node_destroy(z);
@@ -121,7 +112,7 @@ int btree_node_delete(BTree *btree, BTree_Node *node, int key) {
     return hit;
 }
 
-KV btree_node_get_pred(BTree *btree, BTree_Node *node, int i) {
+Item btree_node_get_pred(BTree *btree, BTree_Node *node, int i) {
     assert(!node->is_leaf);
     BTree_Node *pred = btree_node_read_child(btree, node, i);
 
@@ -131,12 +122,12 @@ KV btree_node_get_pred(BTree *btree, BTree_Node *node, int i) {
         btree_node_destroy(prev);
     }
 
-    KV kv = (KV){.key = pred->keys[pred->count_keys - 1], .value = pred->values[pred->count_keys - 1]};
+    Item item = pred->buf[pred->count_keys - 1];
     btree_node_destroy(pred);
-    return kv;
+    return item;
 }
 
-KV btree_node_get_post(BTree *btree, BTree_Node *node, int i) {
+Item btree_node_get_post(BTree *btree, BTree_Node *node, int i) {
     assert(!node->is_leaf);
     BTree_Node *post = btree_node_read_child(btree, node, i + 1);
 
@@ -146,17 +137,16 @@ KV btree_node_get_post(BTree *btree, BTree_Node *node, int i) {
         btree_node_destroy(prev);
     }
 
-    KV kv = (KV){.key = post->keys[0], .value = post->values[0]};
+    Item item = post->buf[0];
     btree_node_destroy(post);
-    return kv;
+    return item;
 }
 
 void btree_remove_node(BTree *btree, BTree_Node *x) {
     int offset = x->offset;
     x->count_keys = 0;
     x->is_leaf = 0;
-    memset(x->keys, 0, (btree->M - 1) * sizeof(*x->keys));
-    memset(x->values, 0, (btree->M - 1) * sizeof(*x->values));
+    memset(x->buf, 0, (btree->M - 1) * sizeof(*x->buf));
     memset(x->children, 0, btree->M * sizeof(*x->children));
     btree_node_write(btree, x);
     fseek(btree->fp, offset, SEEK_SET);
@@ -167,15 +157,12 @@ void btree_remove_node(BTree *btree, BTree_Node *x) {
 }
 
 void btree_node_merge(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_Node *z, int i, int t) {
-    y->keys[y->count_keys] = x->keys[i];
-    y->values[y->count_keys] = x->values[i];
+    y->buf[y->count_keys] = x->buf[i];
     y->count_keys++;
-    memmove(x->keys + i, x->keys + i + 1, (x->count_keys - i - 1) * sizeof(*x->keys));
-    memmove(x->values + i, x->values + i + 1, (x->count_keys - i - 1) * sizeof(*x->values));
+    memmove(x->buf + i, x->buf + i + 1, (x->count_keys - i - 1) * sizeof(*x->buf));
     memmove(x->children + i + 1, x->children + i + 2, (x->count_keys - i - 1) * sizeof(*x->children));
     x->count_keys--;
-    memcpy(y->keys + y->count_keys, z->keys, (t - 1) * sizeof(*y->keys));
-    memcpy(y->values + y->count_keys, z->values, (t - 1) * sizeof(*y->values));
+    memcpy(y->buf + y->count_keys, z->buf, (t - 1) * sizeof(*y->buf));
 
     if (!y->is_leaf)
         memcpy(y->children + y->count_keys, z->children, t * sizeof(*y->children));
@@ -228,26 +215,22 @@ BTree_Node *btree_node_concatenate(BTree *btree, BTree_Node *x, BTree_Node *x_ci
 }
 
 void btree_node_rotate_left(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_Node *z, int i) {
-    y->keys[y->count_keys] = x->keys[i];
-    y->values[y->count_keys] = x->values[i];
+    y->buf[y->count_keys] = x->buf[i];
 
     if (!y->is_leaf)
         y->children[y->count_keys + 1] = z->children[0];
 
     y->count_keys++;
 
-    x->keys[i] = z->keys[0];
-    x->values[i] = z->keys[0];
+    x->buf[i] = z->buf[0];
 
-    memmove(z->keys, z->keys + 1, (z->count_keys - 1) * sizeof(*z->keys));
-    memmove(z->values, z->values + 1, (z->count_keys - 1) * sizeof(*z->values));
+    memmove(z->buf, z->buf + 1, (z->count_keys - 1) * sizeof(*z->buf));
 
     if (!z->is_leaf)
         memmove(z->children, z->children + 1, z->count_keys * sizeof(*z->children));
 
     z->count_keys--;
-    z->keys[z->count_keys] = 0;
-    z->values[z->count_keys] = 0;
+    z->buf[z->count_keys] = (Item){0};
 
     if (!z->is_leaf)
         z->children[z->count_keys + 1] = 0;
@@ -258,25 +241,21 @@ void btree_node_rotate_left(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_No
 }
 
 void btree_node_rotate_right(BTree *btree, BTree_Node *x, BTree_Node *y, BTree_Node *z, int i) {
-    memmove(z->keys + 1, z->keys, z->count_keys * sizeof(*z->keys));
-    memmove(z->values + 1, z->values, z->count_keys * sizeof(*z->values));
+    memmove(z->buf + 1, z->buf, z->count_keys * sizeof(*z->buf));
 
     if (!z->is_leaf)
         memmove(z->children + 1, z->children, (z->count_keys + 1) * sizeof(*z->children));
 
-    z->keys[0] = x->keys[i];
-    z->values[0] = x->values[i];
+    z->buf[0] = x->buf[i];
 
     if (!z->is_leaf)
         z->children[0] = y->children[y->count_keys];
 
     z->count_keys++;
 
-    x->keys[i] = y->keys[y->count_keys - 1];
-    x->values[i] = y->values[y->count_keys - 1];
+    x->buf[i] = y->buf[y->count_keys - 1];
     y->count_keys--;
-    y->keys[y->count_keys] = 0;
-    y->values[y->count_keys] = 0;
+    y->buf[y->count_keys] = (Item){0};
 
     if (!y->is_leaf)
         y->children[y->count_keys + 1] = 0;

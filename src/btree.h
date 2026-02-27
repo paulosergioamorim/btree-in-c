@@ -2,16 +2,18 @@
 
 #include <stdio.h>
 
-typedef struct btree_node BTree_Node;
+typedef struct item {
+    int key;
+    int value;
+} Item;
 
-struct btree_node {
+typedef struct btree_node {
     int offset;
     int count_keys;
     int is_leaf;
-    int *keys;
-    int *values;
+    Item *buf;
     int *children;
-};
+} BTree_Node;
 
 typedef struct btree {
     int t;
