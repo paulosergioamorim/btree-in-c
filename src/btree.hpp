@@ -39,9 +39,19 @@ template <typename K, typename V> struct BTree_Node {
     }
 
     BTree_Node(BTree<K, V> *btree) {
+        int offset = btree->next_offset;
+
+        if (btree->next_free == -1) {
+            offset = btree->next_offset;
+            btree->next_offset += btree->size_node;
+        } else {
+            offset = btree->next_free;
+            fseek(btree->fp, btree->next_free, SEEK_SET);
+            fread(&btree->next_free, sizeof(btree->next_free), 1, btree->fp);
+        }
+
         this->btree = btree;
-        this->offset = btree->next_offset;
-        btree->next_offset += btree->size_node;
+        this->offset = offset;
         this->is_leaf = 1;
         this->count_keys = 0;
         this->buf = new Item<K, V>[btree->M - 1]();
