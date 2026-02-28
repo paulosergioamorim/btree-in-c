@@ -1,4 +1,4 @@
-#include "btree.h"
+#include "btree.hpp"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,13 +8,13 @@ int main(int argc, char **argv) {
         return 1;
 
     char *path = argv[1];
-    BTree *btree;
+    BTree<int, int> *btree;
 
     if (argc > 2) {
         int t = atoi(argv[2]);
-        btree = btree_init_from_memory(path, t);
+        btree = new BTree<int, int>(path, t);
     } else
-        btree = btree_init_from_db(path);
+        btree = new BTree<int, int>(path);
 
     char op = '\0';
 
@@ -27,14 +27,14 @@ int main(int argc, char **argv) {
         if (op == 'I') {
             int key, value;
             scanf("%d %d", &key, &value);
-            btree_insert(btree, key, value);
+            btree->insert(key, value);
             continue;
         }
 
         if (op == 'S') {
             int key, value;
             scanf("%d", &key);
-            int hit = btree_search(btree, key, &value);
+            int hit = btree->search(key, value);
             printf("%s %d\n", hit ? "HIT VALUE" : "MISS KEY", hit ? value : key);
             continue;
         }
@@ -42,15 +42,14 @@ int main(int argc, char **argv) {
         if (op == 'D') {
             int key;
             scanf("%d", &key);
-            btree_delete(btree, key);
+            btree->remove(key);
             continue;
         }
 
         if (op == 'P')
-            btree_display(btree);
+            btree->display();
     }
 
-    btree_destroy(btree);
-
+    delete btree;
     return 0;
 }

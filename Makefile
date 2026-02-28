@@ -1,8 +1,8 @@
-CC := gcc
+CC := g++
 FLAGS := -Wall
-MAINS := src/main.c src/gen.c
-CFILES := $(wildcard src/*.c)
-HFILES := $(patsubst %.c, %.h, $(filter-out $(MAINS), $(CFILES)))
+MAINS := src/main.cpp 
+CFILES := $(wildcard src/*.cpp)
+HFILES := $(patsubst %.cpp, %.h, $(filter-out $(MAINS), $(CFILES)))
 LIBS := $(patsubst src/%.h, obj/%.o, $(HFILES))
 
 ifdef DEBUG
@@ -14,7 +14,7 @@ all: objFolder main
 objFolder:
 	mkdir -p obj
 
-obj/%.o: src/%.c $(HFILES)
+obj/%.o: src/%.cpp $(HFILES)
 	$(CC) $< -o $@ $(FLAGS) -c
 
 main: obj/main.o $(LIBS)
