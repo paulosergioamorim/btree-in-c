@@ -29,6 +29,7 @@ BTree *btree_init_from_db(char *path) {
     assert(btree->fp);
     int root_offset = 0;
     fread(&btree->t, sizeof(btree->t), 1, btree->fp);
+    assert(btree->t >= 2);
     btree->M = 2 * btree->t;
     fread(&btree->count_nodes, sizeof(btree->count_nodes), 1, btree->fp);
     fread(&btree->next_offset, sizeof(btree->next_offset), 1, btree->fp);
@@ -42,6 +43,7 @@ BTree *btree_init_from_db(char *path) {
 BTree *btree_init_from_memory(char *path, int t) {
     BTree *btree = malloc(sizeof(*btree));
     assert(btree);
+    assert(t >= 2);
     btree->t = t;
     btree->M = 2 * t;
     btree->count_nodes = 0;
@@ -53,6 +55,10 @@ BTree *btree_init_from_memory(char *path, int t) {
     btree_write_header(btree);
     assert(btree->fp);
     return btree;
+}
+
+int btree_hit(BTree *btree, int key) {
+    return btree_node_search(btree, btree->root, key, NULL);
 }
 
 int btree_search(BTree *btree, int key, int *value) {
@@ -82,10 +88,9 @@ void btree_insert(BTree *btree, int key, int value) {
     btree_write_header(btree);
 }
 
-int btree_delete(BTree *btree, int key) {
-    int hit = btree_node_delete(btree, btree->root, key);
+void btree_delete(BTree *btree, int key) {
+    btree_node_delete(btree, btree->root, key);
     btree_write_header(btree);
-    return hit;
 }
 
 void btree_destroy(BTree *btree) {
@@ -109,7 +114,8 @@ int btree_node_search(BTree *btree, BTree_Node *x, int key, int *value) {
         i++;
 
     if (i < x->count_keys && key == x->buf[i].key) {
-        *value = x->buf[i].value;
+        if (value)
+            *value = x->buf[i].value;
         return 1;
     }
 

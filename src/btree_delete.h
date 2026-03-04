@@ -2,4 +2,4 @@
 
 #include "btree.h"
 
-int btree_node_delete(BTree *btree, BTree_Node *node, int key);
+void btree_node_delete(BTree *btree, BTree_Node *node, int key);

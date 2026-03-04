@@ -30,11 +30,13 @@ BTree *btree_init_from_db(char *path);
 
 BTree *btree_init_from_memory(char *path, int t);
 
+int btree_hit(BTree *btree, int key);
+
 int btree_search(BTree *btree, int key, int *value);
 
 void btree_insert(BTree *btree, int key, int value);
 
-int btree_delete(BTree *btree, int key);
+void btree_delete(BTree *btree, int key);
 
 void btree_destroy(BTree *btree);
 
