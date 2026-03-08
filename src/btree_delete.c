@@ -134,7 +134,7 @@ Item btree_node_get_post(BTree *btree, BTree_Node *node, int i) {
 }
 
 void btree_remove_node(BTree *btree, BTree_Node *x) {
-    int offset = x->offset;
+    long offset = x->offset;
     x->count_keys = 0;
     x->is_leaf = 0;
     memset(x->buf, 0, (btree->M - 1) * sizeof(*x->buf));

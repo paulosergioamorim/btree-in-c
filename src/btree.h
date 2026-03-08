@@ -8,11 +8,11 @@ typedef struct item {
 } Item;
 
 typedef struct btree_node {
-    int offset;
+    long offset;
     int count_keys;
     int is_leaf;
     Item *buf;
-    int *children;
+    long *children;
 } BTree_Node;
 
 typedef struct btree {
@@ -20,8 +20,8 @@ typedef struct btree {
     int M;
     int count_nodes;
     int size_node;
-    int next_offset;
-    int next_free;
+    long next_offset;
+    long next_free;
     FILE *fp;
     BTree_Node *root;
 } BTree;
