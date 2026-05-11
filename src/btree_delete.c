@@ -1,5 +1,6 @@
 #include "btree.h"
-#include <assert.h>
+#include "btree_fs.h"
+#include <unistd.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -104,7 +105,6 @@ void btree_node_delete(BTree *btree, BTree_Node *node, int key) {
 }
 
 Item btree_node_get_pred(BTree *btree, BTree_Node *node, int i) {
-    assert(!node->is_leaf);
     BTree_Node *pred = btree_node_read_child(btree, node, i);
 
     while (!pred->is_leaf) {
@@ -119,7 +119,6 @@ Item btree_node_get_pred(BTree *btree, BTree_Node *node, int i) {
 }
 
 Item btree_node_get_post(BTree *btree, BTree_Node *node, int i) {
-    assert(!node->is_leaf);
     BTree_Node *post = btree_node_read_child(btree, node, i + 1);
 
     while (!post->is_leaf) {
@@ -140,8 +139,8 @@ void btree_remove_node(BTree *btree, BTree_Node *x) {
     memset(x->buf, 0, (btree->M - 1) * sizeof(*x->buf));
     memset(x->children, 0, btree->M * sizeof(*x->children));
     btree_node_write(btree, x);
-    fseek(btree->fp, offset, SEEK_SET);
-    fwrite(&btree->next_free, sizeof(btree->next_free), 1, btree->fp);
+    lseek(btree->fd, offset, SEEK_SET);
+    write(btree->fd, &btree->next_free, sizeof(btree->next_free));
     btree->next_free = x->offset;
     btree_node_destroy(x);
     btree->count_nodes--;

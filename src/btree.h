@@ -1,7 +1,5 @@
 #pragma once
 
-#include <stdio.h>
-
 typedef struct item {
     int key;
     int value;
@@ -22,7 +20,7 @@ typedef struct btree {
     int size_node;
     long next_offset;
     long next_free;
-    FILE *fp;
+    int fd;
     BTree_Node *root;
 } BTree;
 
@@ -41,11 +39,5 @@ void btree_delete(BTree *btree, int key);
 void btree_destroy(BTree *btree);
 
 void btree_display(BTree *btree);
-
-void btree_node_refresh_child(BTree *btree, BTree_Node *node, BTree_Node *x_ci, int new_i);
-
-BTree_Node *btree_node_read_child(BTree *btree, BTree_Node *node, int i);
-
-void btree_node_write(BTree *btree, BTree_Node *node);
 
 void btree_node_destroy(BTree_Node *node);
