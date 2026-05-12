@@ -8,13 +8,13 @@ int main(int argc, char **argv) {
         return 1;
 
     char *path = argv[1];
-    BTree *btree;
+    Btree *btree;
 
     if (argc > 2) {
         int t = atoi(argv[2]);
-        btree = btree_init_from_memory(path, t);
+        btree_init(&btree, BTREE_OPTS_NEW_FILE(path, t));
     } else
-        btree = btree_init_from_db(path);
+        btree_init(&btree, BTREE_OPTS_FROM_FILE(path));
 
     char op = '\0';
 
@@ -46,8 +46,10 @@ int main(int argc, char **argv) {
             continue;
         }
 
+#ifdef BTREE_DISPLAY_IMPLEMENTATION
         if (op == 'P')
             btree_display(btree);
+#endif
     }
 
     btree_destroy(btree);
