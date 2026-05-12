@@ -157,7 +157,7 @@ int btree_init(Btree **btree_ptr, Btree_Opts opts) {
         btree->count_nodes = 0;
         btree->next_offset = BTREE_SIZEOF_HEADER;
         btree->size_node = BTREE_SIZEOF_NODE(btree);
-        btree->fd = open(opts.path, O_RDWR);
+        btree->fd = open(opts.path, O_RDWR | O_CREAT | O_TRUNC);
 
         if (btree->fd == -1) {
             free(btree);
