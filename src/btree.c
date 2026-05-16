@@ -1,10 +1,14 @@
 #include "btree.h"
+#include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
-#define BTREE_SIZEOF_HEADER (2 * sizeof(int) + 3 * sizeof(long))
+#define HEADER_BYTES {0x7f, 'B', 'T', 'F'}
+#define HEADER_BYTES_LEN 4
+#define BTREE_SIZEOF_HEADER (HEADER_BYTES_LEN + 2 * sizeof(int) + 3 * sizeof(long))
 
 #define BTREE_SIZEOF_NODE(btree)                                                                                       \
     (sizeof(btree->root->count_keys) + (btree->M - 1) * sizeof(*btree->root->buf) +                                    \
@@ -75,6 +79,8 @@ void btree_node_write(Btree *btree, Btree_Node *node) {
 
 void btree_write_header(Btree *btree) {
     lseek(btree->fd, 0, SEEK_SET);
+    unsigned char header_bytes[] = HEADER_BYTES;
+    write(btree->fd, header_bytes, HEADER_BYTES_LEN * sizeof(*header_bytes));
     write(btree->fd, &btree->t, sizeof(btree->t));
     write(btree->fd, &btree->count_nodes, sizeof(btree->count_nodes));
     write(btree->fd, &btree->next_offset, sizeof(btree->next_offset));
@@ -82,11 +88,14 @@ void btree_write_header(Btree *btree) {
     write(btree->fd, &btree->next_free, sizeof(btree->next_free));
 }
 
-int btree_init(Btree **btree_ptr, Btree_Opts opts) {
-    if (opts.override_file) {
-        if (opts.t < 2) {
+int btree_init(Btree **btree_ptr, const char *path, int t) {
+    struct stat statbuf = (struct stat){0};
+    int res = stat(path, &statbuf);
+
+    if (res == -1 && errno == ENOENT) {
+        if (t < 2) {
             *btree_ptr = NULL;
-            return BTREE_ERROR_TO_SMALL_PARAM_T;
+            return BTREE_ERROR_SMALL_PARAM_T;
         }
 
         Btree *btree = malloc(sizeof(*btree));
@@ -96,12 +105,11 @@ int btree_init(Btree **btree_ptr, Btree_Opts opts) {
             return BTREE_ERROR_ALLOC;
         }
 
-        btree->t = opts.t;
-        btree->M = 2 * opts.t;
+        btree->t = t;
+        btree->M = 2 * t;
         btree->count_nodes = 0;
         btree->next_offset = BTREE_SIZEOF_HEADER;
-        btree->size_node = BTREE_SIZEOF_NODE(btree);
-        btree->fd = open(opts.path, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+        btree->fd = open(path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
 
         if (btree->fd == -1) {
             free(btree);
@@ -124,7 +132,7 @@ int btree_init(Btree **btree_ptr, Btree_Opts opts) {
         return BTREE_ERROR_ALLOC;
     }
 
-    btree->fd = open(opts.path, O_RDWR);
+    btree->fd = open(path, O_RDWR);
 
     if (btree->fd == -1) {
         free(btree);
@@ -133,6 +141,19 @@ int btree_init(Btree **btree_ptr, Btree_Opts opts) {
     }
 
     long root_offset = 0;
+    unsigned char check_bytes[] = HEADER_BYTES;
+    unsigned char header_bytes[HEADER_BYTES_LEN];
+    read(btree->fd, header_bytes, HEADER_BYTES_LEN * sizeof(*header_bytes));
+
+    for (int i = 0; i < HEADER_BYTES_LEN; i++) {
+        if (header_bytes[i] != check_bytes[i]) {
+            close(btree->fd);
+            free(btree);
+            *btree_ptr = NULL;
+            return BTREE_ERROR_FORMAT;
+        }
+    }
+
     read(btree->fd, &btree->t, sizeof(btree->t));
     btree->M = 2 * btree->t;
     read(btree->fd, &btree->count_nodes, sizeof(btree->count_nodes));
@@ -140,7 +161,6 @@ int btree_init(Btree **btree_ptr, Btree_Opts opts) {
     read(btree->fd, &root_offset, sizeof(root_offset));
     read(btree->fd, &btree->next_free, sizeof(btree->next_free));
     btree->root = btree_node_read(btree, root_offset);
-    btree->size_node = BTREE_SIZEOF_NODE(btree);
     *btree_ptr = btree;
 
     return BTREE_OK;
@@ -233,7 +253,7 @@ int btree_node_find(Btree *btree, Btree_Node *x, int key, int *value) {
 int btree_pop_free_offset(Btree *btree) {
     if (btree->next_free == -1) {
         long offset = btree->next_offset;
-        btree->next_offset += btree->size_node;
+        btree->next_offset += BTREE_SIZEOF_NODE(btree);
         return offset;
     }
 
@@ -309,7 +329,7 @@ int btree_node_insert_nonfull(Btree *btree, Btree_Node *x, int key, int value) {
             i--;
         }
 
-        if (x->buf[i].key == key) {
+        if (i >= 0 && x->buf[i].key == key) {
             return BTREE_ERROR_KEY_ALREADY_EXISTS;
         }
 
@@ -426,8 +446,8 @@ int btree_node_delete(Btree *btree, Btree_Node *node, int key) {
         return res;
     }
 
-    Btree_Node *sibbling_left = btree_node_read(btree, node->children[i - 1]);
-    Btree_Node *sibbling_right = btree_node_read(btree, node->children[i + 1]);
+    Btree_Node *sibbling_left = i == 0 ? NULL : btree_node_read(btree, node->children[i - 1]);
+    Btree_Node *sibbling_right = i == node->count_keys ? NULL : btree_node_read(btree, node->children[i + 1]);
 
     if (btree_node_redistribute(btree, node, x_ci, sibbling_left, sibbling_right, i)) {
         if (sibbling_left)
@@ -604,7 +624,7 @@ const char *btree_strerr(int err) {
     switch (err) {
     case BTREE_OK:
         return "Ok";
-    case BTREE_ERROR_TO_SMALL_PARAM_T:
+    case BTREE_ERROR_SMALL_PARAM_T:
         return "Param t must be >= 2";
     case BTREE_ERROR_KEY_NOT_FOUND:
         return "Key not found";
@@ -618,6 +638,8 @@ const char *btree_strerr(int err) {
         return "Error to close the file";
     case BTREE_ERROR_NULLPTR:
         return "Null pointer to struct";
+    case BTREE_ERROR_FORMAT:
+        return "Invalid file format";
     default:
         return "Unknown";
     }

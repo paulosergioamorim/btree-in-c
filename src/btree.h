@@ -2,13 +2,14 @@
 #define _BTREE_H
 
 #define BTREE_OK 0
-#define BTREE_ERROR_TO_SMALL_PARAM_T 1
+#define BTREE_ERROR_SMALL_PARAM_T 1
 #define BTREE_ERROR_KEY_NOT_FOUND 2
 #define BTREE_ERROR_KEY_ALREADY_EXISTS 3
 #define BTREE_ERROR_ALLOC 4
 #define BTREE_ERROR_OPEN_FILE 5
 #define BTREE_ERROR_CLOSE_FILE 6
 #define BTREE_ERROR_NULLPTR 7
+#define BTREE_ERROR_FORMAT 8
 
 typedef struct item {
     int key;
@@ -27,23 +28,13 @@ typedef struct btree {
     int t;
     int M;
     int count_nodes;
-    int size_node;
     long next_offset;
     long next_free;
     int fd;
     Btree_Node *root;
 } Btree;
 
-typedef struct btree_opts {
-    const char *path;
-    const int t;
-    const int override_file;
-} Btree_Opts;
-
-#define BTREE_OPTS_NEW_FILE(path, t) ((Btree_Opts){path, t, 1})
-#define BTREE_OPTS_FROM_FILE(path) ((Btree_Opts){path, 0, 0})
-
-int btree_init(Btree **btree_ptr, Btree_Opts opts);
+int btree_init(Btree **btree_ptr, const char *path, int t);
 
 int btree_find(Btree *btree, int key, int *value);
 

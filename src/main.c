@@ -4,18 +4,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-int main(int argc, char **argv) {
+int main(int argc, const char **argv) {
     if (argc < 2)
         return 1;
 
-    char *path = argv[1];
+    const char *path = argv[1];
     Btree *btree;
 
-    if (argc > 2) {
-        int t = atoi(argv[2]);
-        btree_init(&btree, BTREE_OPTS_NEW_FILE(path, t));
-    } else {
-        btree_init(&btree, BTREE_OPTS_FROM_FILE(path));
+    int t = argc > 2 ? atoi(argv[2]) : 0;
+    int res = btree_init(&btree, path, t);
+
+    if (res != BTREE_OK) {
+        printf("%s\n", btree_strerr(res));
+        return 0;
     }
 
     char op = '\0';
