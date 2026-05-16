@@ -89,7 +89,7 @@ void btree_node_destroy(Btree_Node *node);
 
 int btree_display(Btree *btree) {
     if (!btree)
-        return BTREE_ERBTREE_ERROR_NULLPTR;
+        return BTREE_ERROR_NULLPTR;
 
     long last_level_offset = btree->root->offset;
     // todo: add upper bound limit
@@ -125,6 +125,8 @@ int btree_display(Btree *btree) {
 
         btree_node_destroy(node);
     }
+
+    return BTREE_OK;
 }
 
 #endif
