@@ -157,7 +157,7 @@ int btree_init(Btree **btree_ptr, Btree_Opts opts) {
         btree->count_nodes = 0;
         btree->next_offset = BTREE_SIZEOF_HEADER;
         btree->size_node = BTREE_SIZEOF_NODE(btree);
-        btree->fd = open(opts.path, O_RDWR | O_CREAT | O_TRUNC);
+        btree->fd = open(opts.path, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
 
         if (btree->fd == -1) {
             free(btree);
@@ -180,7 +180,7 @@ int btree_init(Btree **btree_ptr, Btree_Opts opts) {
         return BTREE_ERROR_ALLOC;
     }
 
-    btree->fd = open(opts.path, O_RDWR | O_CREAT);
+    btree->fd = open(opts.path, O_RDWR);
 
     if (btree->fd == -1) {
         free(btree);
