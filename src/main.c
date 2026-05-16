@@ -1,3 +1,4 @@
+#define BTREE_DISPLAY_IMPLEMENTATION
 #include "btree.h"
 #include <assert.h>
 #include <stdio.h>
@@ -13,8 +14,9 @@ int main(int argc, char **argv) {
     if (argc > 2) {
         int t = atoi(argv[2]);
         btree_init(&btree, BTREE_OPTS_NEW_FILE(path, t));
-    } else
+    } else {
         btree_init(&btree, BTREE_OPTS_FROM_FILE(path));
+    }
 
     char op = '\0';
 
@@ -34,8 +36,8 @@ int main(int argc, char **argv) {
         if (op == 'S') {
             int key, value;
             scanf("%d", &key);
-            int hit = btree_search(btree, key, &value);
-            printf("%s %d\n", hit ? "HIT VALUE" : "MISS KEY", hit ? value : key);
+            int res = btree_find(btree, key, &value);
+            printf("%s %d\n", res == BTREE_OK ? "HIT VALUE" : "MISS KEY", res == BTREE_OK ? value : key);
             continue;
         }
 
@@ -46,10 +48,8 @@ int main(int argc, char **argv) {
             continue;
         }
 
-#ifdef BTREE_DISPLAY_IMPLEMENTATION
         if (op == 'P')
             btree_display(btree);
-#endif
     }
 
     btree_destroy(btree);
