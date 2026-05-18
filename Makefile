@@ -1,29 +1,35 @@
-CC := gcc
-FLAGS := -Wall
-MAINS := src/main.c src/gen.c
-CFILES := $(wildcard src/*.c)
-HFILES := $(patsubst %.c, %.h, $(filter-out $(MAINS), $(CFILES)))
-LIBS := $(patsubst src/%.h, obj/%.o, $(HFILES))
+CC 		:= gcc
+FLAGS 	:= -Wall -MMD -MP
+SRC 	:= $(wildcard src/*.c)
+TEST	:= $(wildcard test/*.c)
+OBJ 	:= $(SRC:src/%.c=obj/%.o) $(TEST:test/%.c=obj/%_test.o)
+DEP 	:= $(OBJ:.o=.d)
 
 ifdef DEBUG
-	FLAGS += -ggdb -O0
+	FLAGS += -g -O0
 endif
 
-all: objFolder main
+all: main
 
 objFolder:
 	mkdir -p obj
 
-obj/%.o: src/%.c $(HFILES)
-	$(CC) $< -o $@ $(FLAGS) -c
+obj/%_test.o: test/%.c | objFolder
+	$(CC) $< -o $@ -c $(FLAGS)
 
-main: obj/main.o $(LIBS)
+obj/%.o: src/%.c | objFolder
+	$(CC) $< -o $@ -c $(FLAGS)
+
+main: obj/main.o obj/btree.o
+	$(CC) $^ -o $@ $(FLAGS)
+
+benchmark1: obj/benchmark1_test.o obj/btree.o
 	$(CC) $^ -o $@ $(FLAGS)
 
 clean:
-	rm -rf main obj
+	rm -rf obj
 
-format: src/*.c src/*.h
-	@ clang-format -i src/*.c src/*.h -style=file
+-include $(DEP)
 
-.PHONY: all objFolder main clean format
+.PHONY: all clean objFolder
+
