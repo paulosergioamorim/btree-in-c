@@ -32,6 +32,12 @@ typedef struct btree {
     long next_free;
     int fd;
     Btree_Node *root;
+    Btree_Node *aux_x;
+    Btree_Node *aux_x_ci;
+    Btree_Node *aux_y;
+    Btree_Node *aux_z;
+    Btree_Node *aux_sbl;
+    Btree_Node *aux_sbr;
 } Btree;
 
 int btree_init(Btree **btree_ptr, const char *path, int t);
@@ -48,6 +54,14 @@ int btree_display(Btree *btree);
 
 const char *btree_strerr(int err);
 
+void btree_node_clear_v2(Btree *btree, Btree_Node *node);
+
+void btree_node_read_v2(Btree *btree, long offset, Btree_Node *node);
+
+void btree_node_write_v2(Btree *btree, Btree_Node *node);
+
+Btree_Node *btree_node_init_v2(Btree *btree);
+
 #ifdef BTREE_IMPLEMENTATION
 #define BTREE_INIT_IMPLEMENTATION
 #define BTREE_FIND_IMPLEMENTATION
@@ -58,10 +72,6 @@ const char *btree_strerr(int err);
 
 #ifdef BTREE_DISPLAY_IMPLEMENTATION
 #include <stdio.h>
-
-Btree_Node *btree_node_read(Btree *btree, long offset);
-
-void btree_node_destroy(Btree_Node *node);
 
 #define btree_node_enqueue(queue, head, count, offset)                                                                 \
     ({                                                                                                                 \
@@ -91,7 +101,8 @@ int btree_display(Btree *btree) {
 
     while (count > 0) {
         long offset = btree_node_dequeue(queue, head, count);
-        Btree_Node *node = btree_node_read(btree, offset);
+        btree_node_read_v2(btree, offset, btree->aux_y);
+        Btree_Node *node = btree->aux_y;
 
         printf("[ ");
 
@@ -106,7 +117,7 @@ int btree_display(Btree *btree) {
         }
 
         if (node->is_leaf) {
-            btree_node_destroy(node);
+            btree_node_clear_v2(btree, node);
             continue;
         }
 
@@ -114,7 +125,7 @@ int btree_display(Btree *btree) {
             btree_node_enqueue(queue, head, count, node->children[i]);
         }
 
-        btree_node_destroy(node);
+        btree_node_clear_v2(btree, node);
     }
 
     return BTREE_OK;
