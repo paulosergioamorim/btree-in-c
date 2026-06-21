@@ -3,3 +3,4 @@ main
 .cache
 compile_commands.json
 *.db
+*.out

@@ -23,7 +23,7 @@ obj/%.o: src/%.c | objFolder
 main: obj/main.o obj/btree.o
 	$(CC) $^ -o $@ $(FLAGS)
 
-benchmark1: obj/benchmark1_test.o obj/btree.o
+benchmark1.out: obj/benchmark1_test.o obj/btree.o
 	$(CC) $^ -o $@ $(FLAGS)
 
 clean:
