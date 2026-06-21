@@ -1,5 +1,5 @@
 CC 		:= gcc
-FLAGS 	:= -Wall -MMD -MP
+FLAGS 	:= -Wall -Wextra -MMD -MP
 SRC 	:= $(wildcard src/*.c)
 TEST	:= $(wildcard test/*.c)
 OBJ 	:= $(SRC:src/%.c=obj/%.o) $(TEST:test/%.c=obj/%_test.o)
