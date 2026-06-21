@@ -16,6 +16,8 @@ static const int __btree_magic_bytes = 0x4654427f; // 0x7F 'B' 'T' 'F'
 /* === IO === */
 void btree_node_write(Btree *btree, Btree_Node *node);
 
+void btree_node_read2(Btree *btree, Btree_Node *node, size_t offset);
+
 Btree_Node *btree_node_read(Btree *btree, size_t offset);
 
 void btree_node_destroy(Btree_Node *node);
@@ -24,6 +26,8 @@ void btree_header_write(Btree *btree);
 
 void btree_header_read(Btree *btree, int *magic_bytes);
 /* === IO === */
+
+void btree_set_root(Btree *btree, Btree_Node *node);
 
 void btree_node_destroy(Btree_Node *node);
 
@@ -37,48 +41,22 @@ void btree_node_split_child(Btree *btree, Btree_Node *x, Btree_Node *x_ci, int i
 
 int btree_node_insert_nonfull(Btree *btree, Btree_Node *x, int key, int value);
 
+Btree_Node *btree_node_init(Btree *btree);
+
 Btree_Node *btree_node_read(Btree *btree, size_t offset) {
     if (offset < 0 || offset >= btree->header.next_offset)
         return NULL;
 
-    Btree_Node *node = malloc(sizeof(*node));
+    Btree_Node *node = btree_node_init(btree);
 
     if (!node)
         return NULL;
 
-    node->items = malloc((btree->header.M - 1) * sizeof(*node->items));
-
-    if (!node->items) {
-        free(node);
-        return NULL;
-    }
-
-    node->children = malloc(btree->header.M * sizeof(*node->children));
-    if (!node->children) {
-        free(node->items);
-        free(node);
-        return NULL;
-    }
-    node->offset = offset;
-    const int n = 3;
-    struct iovec vec[n];
-    vec[0].iov_base = &node->count_keys;
-    vec[0].iov_len = sizeof(node->count_keys);
-    vec[1].iov_base = node->items;
-    vec[1].iov_len = (btree->header.M - 1) * sizeof(*node->items);
-    vec[2].iov_base = node->children;
-    vec[2].iov_len = (btree->header.M) * sizeof(*node->children);
-    preadv(btree->fd, vec, n, offset);
-    node->is_leaf = node->children[0] == 0;
+    btree_node_read2(btree, node, offset);
     return node;
 }
 
 void btree_node_write(Btree *btree, Btree_Node *node) {
-    long offset = node->offset;
-
-    if (offset < 0 || offset >= btree->header.next_offset)
-        return;
-
     const int n = 3;
     struct iovec vec[n];
     vec[0].iov_base = &node->count_keys;
@@ -87,7 +65,7 @@ void btree_node_write(Btree *btree, Btree_Node *node) {
     vec[1].iov_len = (btree->header.M - 1) * sizeof(*node->items);
     vec[2].iov_base = node->children;
     vec[2].iov_len = (btree->header.M) * sizeof(*node->children);
-    pwritev(btree->fd, vec, n, offset);
+    pwritev(btree->fd, vec, n, node->offset);
 }
 
 void btree_header_write(Btree *btree) {
@@ -101,16 +79,11 @@ void btree_header_write(Btree *btree) {
 }
 
 int btree_init(Btree *btree, const char *path, int t) {
-    struct stat statbuf = (struct stat){0};
-    int res = stat(path, &statbuf);
+    btree->fd = open(path, O_RDWR);
 
-    if (res == -1 && errno == ENOENT) {
+    if (btree->fd == -1 && errno == ENOENT) {
         if (t < 2) {
             return BTREE_ERROR_SMALL_T;
-        }
-
-        if (!btree) {
-            return BTREE_ERROR;
         }
 
         btree->header.t = t;
@@ -120,7 +93,6 @@ int btree_init(Btree *btree, const char *path, int t) {
         btree->fd = open(path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
 
         if (btree->fd == -1) {
-            free(btree);
             return BTREE_ERROR;
         }
 
@@ -132,16 +104,6 @@ int btree_init(Btree *btree, const char *path, int t) {
         return BTREE_OK;
     }
 
-    if (!btree) {
-        return BTREE_ERROR;
-    }
-
-    btree->fd = open(path, O_RDWR);
-
-    if (btree->fd == -1) {
-        return BTREE_ERROR;
-    }
-
     int magic_bytes = 0;
     btree_header_read(btree, &magic_bytes);
 
@@ -150,7 +112,15 @@ int btree_init(Btree *btree, const char *path, int t) {
         return BTREE_ERROR_FORMAT;
     }
 
-    btree->root = btree_node_read(btree, btree->header.root_offset);
+    Btree_Node *root = btree_append_node(btree);
+    btree_set_root(btree, root);
+
+    if (!btree->root) {
+        close(btree->fd);
+        return BTREE_ERROR;
+    }
+
+    btree_node_read2(btree, btree->root, btree->header.root_offset);
     return BTREE_OK;
 }
 
@@ -158,7 +128,11 @@ int btree_find(Btree *btree, int key, int *value) {
     if (!btree) {
         return BTREE_ERROR_NULLPTR;
     }
-    return btree_node_find(btree, btree->root, key, value);
+    Btree_Node *x = btree_node_init(btree);
+    btree_node_read2(btree, x, btree->header.root_offset);
+    int res = btree_node_find(btree, x, key, value);
+    btree_node_destroy(x);
+    return res;
 }
 
 int btree_insert(Btree *btree, int key, int value) {
@@ -178,7 +152,7 @@ int btree_insert(Btree *btree, int key, int value) {
     s->children[0] = btree->root->offset;
     btree_node_split_child(btree, s, btree->root, 0);
     btree_node_destroy(btree->root);
-    btree->root = s;
+    btree_set_root(btree, s);
     int res = btree_node_insert_nonfull(btree, s, key, value);
     btree_header_write(btree);
     return res;
@@ -229,10 +203,8 @@ int btree_node_find(Btree *btree, Btree_Node *x, int key, int *value) {
     if (x->is_leaf)
         return BTREE_ERROR_KEY_NOT_FOUND;
 
-    Btree_Node *x_ci = btree_node_read(btree, x->children[i]);
-
-    int hit = btree_node_find(btree, x_ci, key, value);
-    btree_node_destroy(x_ci);
+    btree_node_read2(btree, x, x->children[i]);
+    int hit = btree_node_find(btree, x, key, value);
     return hit;
 }
 
@@ -250,23 +222,14 @@ int btree_pop_free_offset(Btree *btree) {
 }
 
 Btree_Node *btree_append_node(Btree *btree) {
-    Btree_Node *node = malloc(sizeof(*node));
+    Btree_Node *node = btree_node_init(btree);
+
     if (!node)
         return NULL;
+
     node->offset = btree_pop_free_offset(btree);
     node->is_leaf = 1;
     node->count_keys = 0;
-    node->items = calloc((btree->header.M - 1), sizeof(*node->items));
-    if (!node->items) {
-        free(node);
-        return NULL;
-    }
-    node->children = calloc(btree->header.M, sizeof(*node->children));
-    if (!node->children) {
-        free(node->items);
-        free(node);
-        return NULL;
-    }
     btree->header.count_nodes++;
     btree_node_write(btree, node);
     return node;
@@ -512,7 +475,7 @@ void btree_node_merge(Btree *btree, Btree_Node *x, Btree_Node *y, Btree_Node *z,
 
     if (btree->root == x && x->count_keys == 0) {
         btree_remove_node(btree, x);
-        btree->root = y;
+        btree_set_root(btree, y);
     }
 
     btree_remove_node(btree, z);
@@ -635,4 +598,97 @@ void btree_header_read(Btree *btree, int *magic_bytes) {
     vec[1].iov_base = &btree->header;
     vec[1].iov_len = sizeof(btree->header);
     preadv(btree->fd, vec, n, 0);
+}
+
+#define btree_node_enqueue(queue, head, count, offset)                                                                 \
+    ({                                                                                                                 \
+        int idx = (head + count) % btree->header.count_nodes;                                                          \
+        queue[idx] = offset;                                                                                           \
+        count++;                                                                                                       \
+    })
+
+#define btree_node_dequeue(queue, head, count)                                                                         \
+    ({                                                                                                                 \
+        int offset = queue[head];                                                                                      \
+        head = (head + 1) % btree->header.count_nodes;                                                                 \
+        count--;                                                                                                       \
+        offset;                                                                                                        \
+    })
+
+int btree_display(Btree *btree, FILE *fp) {
+    if (!btree)
+        return BTREE_ERROR_NULLPTR;
+
+    long last_level_offset = btree->root->offset;
+    // todo: add upper bound limit
+    long queue[btree->header.count_nodes];
+    int head = 0;
+    int count = 0;
+    btree_node_enqueue(queue, head, count, btree->root->offset);
+    Btree_Node *node = btree_node_init(btree);
+
+    while (count > 0) {
+        long offset = btree_node_dequeue(queue, head, count);
+        btree_node_read2(btree, node, offset);
+
+        fprintf(fp, "[ ");
+
+        for (int i = 0; i < node->count_keys; i++)
+            fprintf(fp, "%d ", node->items[i].key);
+
+        fprintf(fp, "] ");
+
+        if (offset == last_level_offset) {
+            last_level_offset = node->children[node->count_keys];
+            fprintf(fp, "\n");
+        }
+
+        if (node->is_leaf) {
+            continue;
+        }
+
+        for (int i = 0; i <= node->count_keys; i++) {
+            btree_node_enqueue(queue, head, count, node->children[i]);
+        }
+    }
+
+    btree_node_destroy(node);
+    return BTREE_OK;
+}
+
+Btree_Node *btree_node_init(Btree *btree) {
+    Btree_Node *node = malloc(sizeof(*node));
+    if (!node)
+        return NULL;
+    node->items = calloc((btree->header.M - 1), sizeof(*node->items));
+    if (!node->items) {
+        free(node);
+        return NULL;
+    }
+    node->children = calloc(btree->header.M, sizeof(*node->children));
+    if (!node->children) {
+        free(node->items);
+        free(node);
+        return NULL;
+    }
+    return node;
+}
+
+void btree_node_read2(Btree *btree, Btree_Node *node, size_t offset) {
+    node->offset = offset;
+    const int n = 3;
+    struct iovec vec[n];
+    vec[0].iov_base = &node->count_keys;
+    vec[0].iov_len = sizeof(node->count_keys);
+    vec[1].iov_base = node->items;
+    vec[1].iov_len = (btree->header.M - 1) * sizeof(*node->items);
+    vec[2].iov_base = node->children;
+    vec[2].iov_len = (btree->header.M) * sizeof(*node->children);
+    preadv(btree->fd, vec, n, offset);
+    node->is_leaf = node->children[0] == 0;
+}
+
+void btree_set_root(Btree *btree, Btree_Node *node) {
+    btree->root = node;
+    btree->header.root_offset = node->offset;
 }

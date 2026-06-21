@@ -50,7 +50,7 @@ int main(int argc, const char **argv) {
         }
 
         if (op == 'P')
-            btree_display(&btree);
+            btree_display(&btree, stdout);
     }
 
     btree_destroy(&btree);
