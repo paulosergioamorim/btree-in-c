@@ -13,7 +13,7 @@ int main(int argc, char **argv) {
     int len = 10000000; // the test size
     long seed = 42;
     int t = 200;
-    Btree *btree;
+    Btree btree;
     remove("benchmark1.db");
     int ok = btree_init(&btree, "benchmark1.db", t);
     assert(ok == BTREE_OK && "Failed to init btree");
@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
     time_t start = clock();
     for (int i = 0; i < len; i++) {
         int key = keys[i];
-        int ok = btree_insert(btree, key, key);
+        int ok = btree_insert(&btree, key, key);
         if (ok != BTREE_OK) {
             printf("%s\n", btree_strerr(ok));
             assert(0);
@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
            "t = %d\n",
            len, dtime_secs, t);
 
-    btree_destroy(btree);
+    btree_destroy(&btree);
     free(keys);
     return 0;
 }

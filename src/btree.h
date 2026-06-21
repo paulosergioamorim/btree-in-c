@@ -1,6 +1,10 @@
 #ifndef _BTREE_H
 #define _BTREE_H
 
+#include <stddef.h>
+
+typedef int Btree_Fd;
+
 typedef enum btree_error {
     BTREE_OK,
     BTREE_ERROR,
@@ -20,21 +24,26 @@ typedef struct btree_node {
     long offset;
     int count_keys;
     int is_leaf;
-    Item *buf;
+    Item *items;
     long *children;
 } Btree_Node;
 
-typedef struct btree {
+typedef struct btree_header {
     int t;
     int M;
     int count_nodes;
-    long next_offset;
-    long next_free;
-    int fd;
+    size_t next_offset;
+    size_t next_free_offset;
+    size_t root_offset;
+} Btree_Header;
+
+typedef struct btree {
+    Btree_Header header;
+    Btree_Fd fd;
     Btree_Node *root;
 } Btree;
 
-int btree_init(Btree **btree_ptr, const char *path, int t);
+int btree_init(Btree *btree, const char *path, int t);
 
 int btree_find(Btree *btree, int key, int *value);
 
@@ -65,7 +74,7 @@ void btree_node_destroy(Btree_Node *node);
 
 #define btree_node_enqueue(queue, head, count, offset)                                                                 \
     ({                                                                                                                 \
-        int idx = (head + count) % btree->count_nodes;                                                                 \
+        int idx = (head + count) % btree->header.count_nodes;                                                          \
         queue[idx] = offset;                                                                                           \
         count++;                                                                                                       \
     })
@@ -73,7 +82,7 @@ void btree_node_destroy(Btree_Node *node);
 #define btree_node_dequeue(queue, head, count)                                                                         \
     ({                                                                                                                 \
         int offset = queue[head];                                                                                      \
-        head = (head + 1) % btree->count_nodes;                                                                        \
+        head = (head + 1) % btree->header.count_nodes;                                                                 \
         count--;                                                                                                       \
         offset;                                                                                                        \
     })
@@ -84,7 +93,7 @@ int btree_display(Btree *btree) {
 
     long last_level_offset = btree->root->offset;
     // todo: add upper bound limit
-    long queue[btree->count_nodes];
+    long queue[btree->header.count_nodes];
     int head = 0;
     int count = 0;
     btree_node_enqueue(queue, head, count, btree->root->offset);
@@ -96,7 +105,7 @@ int btree_display(Btree *btree) {
         printf("[ ");
 
         for (int i = 0; i < node->count_keys; i++)
-            printf("%d ", node->buf[i].key);
+            printf("%d ", node->items[i].key);
 
         printf("] ");
 
