@@ -95,14 +95,14 @@ int btree_init(Btree **btree_ptr, const char *path, int t) {
     if (res == -1 && errno == ENOENT) {
         if (t < 2) {
             *btree_ptr = NULL;
-            return BTREE_ERROR_SMALL_PARAM_T;
+            return BTREE_ERROR_SMALL_T;
         }
 
         Btree *btree = malloc(sizeof(*btree));
 
         if (!btree) {
             *btree_ptr = NULL;
-            return BTREE_ERROR_ALLOC;
+            return BTREE_ERROR;
         }
 
         btree->t = t;
@@ -114,7 +114,7 @@ int btree_init(Btree **btree_ptr, const char *path, int t) {
         if (btree->fd == -1) {
             free(btree);
             *btree_ptr = NULL;
-            return BTREE_ERROR_OPEN_FILE;
+            return BTREE_ERROR;
         }
 
         btree->next_free = -1;
@@ -129,7 +129,7 @@ int btree_init(Btree **btree_ptr, const char *path, int t) {
 
     if (!btree) {
         *btree_ptr = NULL;
-        return BTREE_ERROR_ALLOC;
+        return BTREE_ERROR;
     }
 
     btree->fd = open(path, O_RDWR);
@@ -137,7 +137,7 @@ int btree_init(Btree **btree_ptr, const char *path, int t) {
     if (btree->fd == -1) {
         free(btree);
         *btree_ptr = NULL;
-        return BTREE_ERROR_OPEN_FILE;
+        return BTREE_ERROR;
     }
 
     long root_offset = 0;
@@ -215,7 +215,7 @@ int btree_destroy(Btree *btree) {
 
     if (close(btree->fd) == -1) {
         free(btree);
-        return BTREE_ERROR_CLOSE_FILE;
+        return BTREE_ERROR;
     }
 
     free(btree);
@@ -330,7 +330,7 @@ int btree_node_insert_nonfull(Btree *btree, Btree_Node *x, int key, int value) {
         }
 
         if (i >= 0 && x->buf[i].key == key) {
-            return BTREE_ERROR_KEY_ALREADY_EXISTS;
+            return BTREE_ERROR_KEY_EXISTS;
         }
 
         x->buf[i + 1] = (Item){.key = key, .value = value};
@@ -624,22 +624,18 @@ const char *btree_strerr(int err) {
     switch (err) {
     case BTREE_OK:
         return "Ok";
-    case BTREE_ERROR_SMALL_PARAM_T:
+    case BTREE_ERROR_SMALL_T:
         return "Param t must be >= 2";
     case BTREE_ERROR_KEY_NOT_FOUND:
         return "Key not found";
-    case BTREE_ERROR_KEY_ALREADY_EXISTS:
+    case BTREE_ERROR_KEY_EXISTS:
         return "Key already exists";
-    case BTREE_ERROR_ALLOC:
-        return "Error to alloc memory";
-    case BTREE_ERROR_OPEN_FILE:
-        return "Error to open the file";
-    case BTREE_ERROR_CLOSE_FILE:
-        return "Error to close the file";
     case BTREE_ERROR_NULLPTR:
         return "Null pointer to struct";
     case BTREE_ERROR_FORMAT:
         return "Invalid file format";
+    case BTREE_ERROR:
+        return strerror(errno); // fallback to errno
     default:
         return "Unknown";
     }

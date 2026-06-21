@@ -1,15 +1,15 @@
 #ifndef _BTREE_H
 #define _BTREE_H
 
-#define BTREE_OK 0
-#define BTREE_ERROR_SMALL_PARAM_T 1
-#define BTREE_ERROR_KEY_NOT_FOUND 2
-#define BTREE_ERROR_KEY_ALREADY_EXISTS 3
-#define BTREE_ERROR_ALLOC 4
-#define BTREE_ERROR_OPEN_FILE 5
-#define BTREE_ERROR_CLOSE_FILE 6
-#define BTREE_ERROR_NULLPTR 7
-#define BTREE_ERROR_FORMAT 8
+typedef enum btree_error {
+    BTREE_OK,
+    BTREE_ERROR,
+    BTREE_ERROR_NULLPTR,
+    BTREE_ERROR_SMALL_T,
+    BTREE_ERROR_KEY_NOT_FOUND,
+    BTREE_ERROR_KEY_EXISTS,
+    BTREE_ERROR_FORMAT
+} Btree_Error;
 
 typedef struct item {
     int key;
