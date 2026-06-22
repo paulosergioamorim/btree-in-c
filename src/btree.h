@@ -7,7 +7,7 @@
 
 typedef int Btree_Fd;
 
-typedef enum btree_error {
+typedef enum btree_result {
     BTREE_OK,
     BTREE_ERROR,
     BTREE_ERROR_NULLPTR,
@@ -15,7 +15,7 @@ typedef enum btree_error {
     BTREE_ERROR_KEY_NOT_FOUND,
     BTREE_ERROR_KEY_EXISTS,
     BTREE_ERROR_FORMAT
-} Btree_Error;
+} Btree_Result;
 
 typedef struct item {
     int key;
@@ -45,17 +45,17 @@ typedef struct btree {
     Btree_Node *root;
 } Btree;
 
-int btree_init(Btree *btree, const char *path, int t);
+Btree_Result btree_init(Btree *btree, const char *path, int t);
 
-int btree_find(Btree *btree, int key, int *value);
+Btree_Result btree_find(const Btree *btree, int key, int *value);
 
-int btree_insert(Btree *btree, int key, int value);
+Btree_Result btree_insert(Btree *btree, int key, int value);
 
-int btree_delete(Btree *btree, int key);
+Btree_Result btree_delete(Btree *btree, int key);
 
-int btree_destroy(Btree *btree);
+Btree_Result btree_destroy(Btree *btree);
 
-int btree_display(Btree *btree, FILE *fp);
+Btree_Result btree_display(const Btree *btree, FILE *fp);
 
 const char *btree_strerr(int err);
 
