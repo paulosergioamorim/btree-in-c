@@ -213,7 +213,7 @@ Btree_Node *btree_append_node(Btree *btree) {
 
 void btree_node_split_child(Btree *btree, Btree_Node *x, Btree_Node *y, int i) {
     Btree_Node *z = btree_append_node(btree);
-    const int t = btree->header.t;
+    int t = btree->header.t;
 
     z->is_leaf = y->is_leaf;
     z->count_keys = t - 1;
@@ -292,7 +292,7 @@ Btree_Result btree_node_insert_nonfull(Btree *btree, Btree_Node *x, int key, int
 
 Btree_Result btree_node_delete(Btree *btree, Btree_Node *node, int key) {
     int i = 0, res = 0;
-    const int t = btree->header.t;
+    int t = btree->header.t;
     Btree_Node *y = NULL, *z = NULL, *x_ci = NULL, *sibbling_left = NULL, *sibbling_right = NULL;
 
     while (i < node->count_keys && key > node->items[i].key)
@@ -422,7 +422,7 @@ void btree_remove_node(Btree *btree, Btree_Node *x) {
 }
 
 void btree_node_merge(Btree *btree, Btree_Node *x, Btree_Node *y, Btree_Node *z, int i) {
-    const int t = btree->header.t;
+    int t = btree->header.t;
     y->items[y->count_keys] = x->items[i];
     y->count_keys++;
     memmove(x->items + i, x->items + i + 1, (x->count_keys - i - 1) * sizeof(*x->items));
@@ -448,7 +448,7 @@ void btree_node_merge(Btree *btree, Btree_Node *x, Btree_Node *y, Btree_Node *z,
 
 bool btree_node_redistribute(const Btree *btree, Btree_Node *x, Btree_Node *x_ci, Btree_Node *sibbling_left,
                              Btree_Node *sibbling_right, int i) {
-    const int t = btree->header.t;
+    int t = btree->header.t;
 
     if (sibbling_left && sibbling_left->count_keys >= t) {
         btree_node_rotate_right(btree, x, sibbling_left, x_ci, i - 1);
@@ -555,7 +555,7 @@ const char *btree_strerr(int err) {
 }
 
 void btree_header_read(Btree *btree, int *magic_bytes) {
-    const int n = 2;
+    int n = 2;
     struct iovec vec[n];
     vec[0].iov_base = magic_bytes;
     vec[0].iov_len = sizeof(*magic_bytes);
@@ -565,7 +565,7 @@ void btree_header_read(Btree *btree, int *magic_bytes) {
 }
 
 void btree_header_write(const Btree *btree) {
-    const int n = 2;
+    int n = 2;
     struct iovec vec[n];
     vec[0].iov_base = (void *)&__btree_magic_bytes;
     vec[0].iov_len = sizeof(__btree_magic_bytes);
@@ -650,7 +650,7 @@ Btree_Node *btree_node_init(const Btree *btree) {
 
 void btree_node_read2(const Btree *btree, Btree_Node *node, size_t offset) {
     node->offset = offset;
-    const int n = 3;
+    int n = 3;
     struct iovec vec[n];
     vec[0].iov_base = &node->count_keys;
     vec[0].iov_len = sizeof(node->count_keys);
@@ -663,7 +663,7 @@ void btree_node_read2(const Btree *btree, Btree_Node *node, size_t offset) {
 }
 
 void btree_node_write(const Btree *btree, const Btree_Node *node) {
-    const int n = 3;
+    int n = 3;
     struct iovec vec[n];
     vec[0].iov_base = (void *)&node->count_keys;
     vec[0].iov_len = sizeof(node->count_keys);
