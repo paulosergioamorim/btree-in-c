@@ -10,9 +10,7 @@
 
 static const int __btree_magic_bytes = 0x4654427f; // 0x7F 'B' 'T' 'F'
 
-#define BTREE_SIZEOF_NODE(btree)                                                                                       \
-    (sizeof(btree->root->count_keys) + (btree->header.M - 1) * sizeof(*btree->root->items) +                           \
-     btree->header.M * sizeof(*btree->root->children))
+size_t btree_node_size_in_file(const Btree *btree);
 
 void btree_node_write(const Btree *btree, const Btree_Node *node);
 
@@ -57,12 +55,14 @@ void btree_node_rotate_right(const Btree *btree, Btree_Node *x, Btree_Node *y, B
 void btree_remove_node(Btree *btree, Btree_Node *x);
 
 Btree_Result btree_init(Btree *btree, const char *path, int t) {
+    if (btree == NULL)
+        return BTREE_ERROR_NULLPTR;
+
     btree->fd = open(path, O_RDWR);
 
     if (btree->fd == -1 && errno == ENOENT) {
-        if (t < 2) {
+        if (t < 2)
             return BTREE_ERROR_SMALL_T;
-        }
 
         btree->header.t = t;
         btree->header.M = 2 * t;
@@ -70,15 +70,13 @@ Btree_Result btree_init(Btree *btree, const char *path, int t) {
         btree->header.next_offset = sizeof(__btree_magic_bytes) + sizeof(btree->header);
         btree->fd = open(path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
 
-        if (btree->fd == -1) {
+        if (btree->fd == -1)
             return BTREE_ERROR;
-        }
 
         btree->header.next_free_offset = 0;
         btree->root = btree_append_node(btree);
         btree->header.root_offset = btree->root->offset;
         btree_header_write(btree);
-
         return BTREE_OK;
     }
 
@@ -92,34 +90,26 @@ Btree_Result btree_init(Btree *btree, const char *path, int t) {
 
     Btree_Node *root = btree_node_init(btree);
     btree_node_read2(btree, root, btree->header.root_offset);
-    btree_set_root(btree, root);
 
     if (!btree->root) {
         close(btree->fd);
         return BTREE_ERROR;
     }
 
-    btree_node_read2(btree, btree->root, btree->header.root_offset);
+    btree_set_root(btree, root);
     return BTREE_OK;
 }
 
 Btree_Result btree_find(const Btree *btree, int key, int *value) {
-    if (!btree) {
-        return BTREE_ERROR_NULLPTR;
-    }
-    return btree_node_find(btree, btree->root, key, value);
+    return btree ? btree_node_find(btree, btree->root, key, value) : BTREE_ERROR_NULLPTR;
 }
 
 Btree_Result btree_insert(Btree *btree, int key, int value) {
-    if (!btree) {
+    if (!btree)
         return BTREE_ERROR_NULLPTR;
-    }
 
-    if (btree->root->count_keys < btree->header.M - 1) {
-        int res = btree_node_insert_nonfull(btree, btree->root, key, value);
-        btree_header_write(btree);
-        return res;
-    }
+    if (btree->root->count_keys < btree->header.M - 1)
+        return btree_node_insert_nonfull(btree, btree->root, key, value);
 
     Btree_Node *s = btree_append_node(btree);
     s->is_leaf = 0;
@@ -128,31 +118,21 @@ Btree_Result btree_insert(Btree *btree, int key, int value) {
     btree_node_split_child(btree, s, btree->root, 0);
     btree_node_destroy(btree->root);
     btree_set_root(btree, s);
-    int res = btree_node_insert_nonfull(btree, s, key, value);
-    btree_header_write(btree);
-    return res;
+    return btree_node_insert_nonfull(btree, s, key, value);
 }
 
 Btree_Result btree_delete(Btree *btree, int key) {
-    if (!btree) {
-        return BTREE_ERROR_NULLPTR;
-    }
-
-    btree_node_delete(btree, btree->root, key);
-    btree_header_write(btree);
-    return BTREE_OK;
+    return btree ? btree_node_delete(btree, btree->root, key) : BTREE_ERROR_NULLPTR;
 }
 
 Btree_Result btree_destroy(Btree *btree) {
-    if (!btree) {
+    if (!btree)
         return BTREE_ERROR_NULLPTR;
-    }
 
     btree_node_destroy(btree->root);
 
-    if (close(btree->fd) == -1) {
+    if (close(btree->fd) == -1)
         return BTREE_ERROR;
-    }
 
     return BTREE_OK;
 }
@@ -178,15 +158,15 @@ Btree_Result btree_node_find(const Btree *btree, Btree_Node *x, int key, int *va
 
     Btree_Node *x_ci = btree_node_init(btree);
     btree_node_read2(btree, x_ci, x->children[i]);
-    int hit = btree_node_find(btree, x_ci, key, value);
+    int res = btree_node_find(btree, x_ci, key, value);
     btree_node_destroy(x_ci);
-    return hit;
+    return res;
 }
 
 int btree_pop_free_offset(Btree *btree) {
     if (btree->header.next_free_offset == 0) {
         long offset = btree->header.next_offset;
-        btree->header.next_offset += BTREE_SIZEOF_NODE(btree);
+        btree->header.next_offset += btree_node_size_in_file(btree);
         return offset;
     }
 
@@ -216,23 +196,17 @@ void btree_node_split_child(Btree *btree, Btree_Node *x, Btree_Node *y, int i) {
 
     z->is_leaf = y->is_leaf;
     z->count_keys = t - 1;
-
     memcpy(z->items, y->items + t, (t - 1) * sizeof(*z->items));
 
     if (!y->is_leaf)
         memcpy(z->children, y->children + t, t * sizeof(*z->children));
 
     y->count_keys = t - 1;
-
     memmove(x->children + i + 1, x->children + i, (x->count_keys - i + 1) * sizeof(*x->children));
-
     x->children[i + 1] = z->offset;
-
     memmove(x->items + i + 1, x->items + i, (x->count_keys - i) * sizeof(*x->items));
-
     x->items[i] = y->items[t - 1];
     x->count_keys++;
-
     memset(y->items + y->count_keys, 0, t * sizeof(*y->items));
 
     if (!y->is_leaf)
@@ -241,6 +215,7 @@ void btree_node_split_child(Btree *btree, Btree_Node *x, Btree_Node *y, int i) {
     btree_node_write(btree, x);
     btree_node_write(btree, y);
     btree_node_write(btree, z);
+    btree_header_write(btree);
     btree_node_destroy(z);
 }
 
@@ -253,9 +228,8 @@ Btree_Result btree_node_insert_nonfull(Btree *btree, Btree_Node *x, int key, int
             i--;
         }
 
-        if (i >= 0 && x->items[i].key == key) {
+        if (i >= 0 && x->items[i].key == key)
             return BTREE_ERROR_KEY_EXISTS;
-        }
 
         x->items[i + 1] = (Item){.key = key, .value = value};
         x->count_keys++;
@@ -267,7 +241,6 @@ Btree_Result btree_node_insert_nonfull(Btree *btree, Btree_Node *x, int key, int
         i--;
 
     i++;
-
     Btree_Node *x_ci = btree_node_init(btree);
     btree_node_read2(btree, x_ci, x->children[i]);
 
@@ -386,9 +359,8 @@ Item btree_node_get_pred(const Btree *btree, const Btree_Node *node, int i) {
     Btree_Node *pred = btree_node_init(btree);
     btree_node_read2(btree, pred, node->children[i]);
 
-    while (!pred->is_leaf) {
+    while (!pred->is_leaf)
         btree_node_read2(btree, pred, pred->children[pred->count_keys]);
-    }
 
     Item item = pred->items[pred->count_keys - 1];
     btree_node_destroy(pred);
@@ -399,9 +371,8 @@ Item btree_node_get_post(const Btree *btree, const Btree_Node *node, int i) {
     Btree_Node *post = btree_node_init(btree);
     btree_node_read2(btree, post, node->children[i + 1]);
 
-    while (!post->is_leaf) {
+    while (!post->is_leaf)
         btree_node_read2(btree, post, post->children[0]);
-    }
 
     Item item = post->items[0];
     btree_node_destroy(post);
@@ -433,7 +404,6 @@ void btree_node_merge(Btree *btree, Btree_Node *x, Btree_Node *y, Btree_Node *z,
         memcpy(y->children + y->count_keys, z->children, t * sizeof(*y->children));
 
     y->count_keys = 2 * t - 1;
-
     btree_node_write(btree, x);
 
     if (btree->root == x && x->count_keys == 0) {
@@ -443,6 +413,7 @@ void btree_node_merge(Btree *btree, Btree_Node *x, Btree_Node *y, Btree_Node *z,
 
     btree_remove_node(btree, z);
     btree_node_write(btree, y);
+    btree_header_write(btree);
 }
 
 bool btree_node_redistribute(const Btree *btree, Btree_Node *x, Btree_Node *x_ci, Btree_Node *sibbling_left,
@@ -488,9 +459,7 @@ void btree_node_rotate_left(const Btree *btree, Btree_Node *x, Btree_Node *y, Bt
         y->children[y->count_keys + 1] = z->children[0];
 
     y->count_keys++;
-
     x->items[i] = z->items[0];
-
     memmove(z->items, z->items + 1, (z->count_keys - 1) * sizeof(*z->items));
 
     if (!z->is_leaf)
@@ -519,7 +488,6 @@ void btree_node_rotate_right(const Btree *btree, Btree_Node *x, Btree_Node *y, B
         z->children[0] = y->children[y->count_keys];
 
     z->count_keys++;
-
     x->items[i] = y->items[y->count_keys - 1];
     y->count_keys--;
     y->items[y->count_keys] = (Item){0};
@@ -616,13 +584,11 @@ Btree_Result btree_display(const Btree *btree, FILE *fp) {
             fprintf(fp, "\n");
         }
 
-        if (node->is_leaf) {
+        if (node->is_leaf)
             continue;
-        }
 
-        for (int i = 0; i <= node->count_keys; i++) {
+        for (int i = 0; i <= node->count_keys; i++)
             btree_node_enqueue(queue, head, count, node->children[i]);
-        }
     }
 
     btree_node_destroy(node);
@@ -671,4 +637,9 @@ void btree_node_write(const Btree *btree, const Btree_Node *node) {
 void btree_set_root(Btree *btree, Btree_Node *node) {
     btree->root = node;
     btree->header.root_offset = node->offset;
+}
+
+size_t btree_node_size_in_file(const Btree *btree) {
+    return sizeof(btree->root->count_keys) + (btree->header.M - 1) * sizeof(*btree->root->items) +
+           (btree->header.M) * sizeof(*btree->root->children);
 }
