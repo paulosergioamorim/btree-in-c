@@ -1,6 +1,7 @@
 #include "btree.h"
 #include <errno.h>
 #include <fcntl.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -157,8 +158,6 @@ Btree_Result btree_destroy(Btree *btree) {
 }
 
 void btree_node_destroy(Btree_Node *node) {
-    free(node->items);
-    free(node->children);
     free(node);
 }
 
@@ -631,20 +630,15 @@ Btree_Result btree_display(const Btree *btree, FILE *fp) {
 }
 
 Btree_Node *btree_node_init(const Btree *btree) {
-    Btree_Node *node = malloc(sizeof(*node));
+    Btree_Node *node = NULL;
+    size_t node_size = sizeof(*node);
+    size_t items_size = (btree->header.M - 1) * sizeof(*node->items);
+    size_t children_size = (btree->header.M) * sizeof(*node->children);
+    node = calloc(1, node_size + items_size + children_size);
     if (!node)
         return NULL;
-    node->items = calloc((btree->header.M - 1), sizeof(*node->items));
-    if (!node->items) {
-        free(node);
-        return NULL;
-    }
-    node->children = calloc(btree->header.M, sizeof(*node->children));
-    if (!node->children) {
-        free(node->items);
-        free(node);
-        return NULL;
-    }
+    node->items = (void *)node + node_size;
+    node->children = (void *)node + node_size + items_size;
     return node;
 }
 
