@@ -58,6 +58,7 @@ Btree_Result btree_init(Btree *btree, const char *path, int t) {
     if (btree == NULL)
         return BTREE_ERROR_NULLPTR;
 
+    *btree = (Btree){0};
     btree->fd = open(path, O_RDWR);
 
     if (btree->fd == -1 && errno == ENOENT) {
