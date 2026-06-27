@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include "../src/btree.h"
+#include "../btree.h"
 
 void swap(int *x1, int *x2);
 

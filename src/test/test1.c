@@ -3,13 +3,13 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include "../src/btree.h"
+#include "../btree.h"
 
 void swap(int *x1, int *x2);
 
 void shuffle(int *vec, int len);
 
-int main(int argc, char **argv) {
+int main() {
     int len = 10000000; // the test size
     long seed = 42;
     int t = 200;

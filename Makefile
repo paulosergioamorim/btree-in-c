@@ -1,35 +1,33 @@
 CC 		:= gcc
 FLAGS 	:= -Wall -Wextra -MMD -MP
-SRC 	:= $(wildcard src/*.c)
-TEST	:= $(wildcard test/*.c)
-OBJ 	:= $(SRC:src/%.c=obj/%.o) $(TEST:test/%.c=obj/%_test.o)
+SRC 	:= $(wildcard src/**/*.c)
+OBJ 	:= $(SRC:src/%.c=obj/%.o)
+TESTS	:= $(SRC:src/test/%.c=%)
 DEP 	:= $(OBJ:.o=.d)
 
 ifdef DEBUG
 	FLAGS += -g -O0
 endif
 
-all: main
+all: main tests
 
-objFolder:
-	mkdir -p obj
-
-obj/%_test.o: test/%.c | objFolder
+obj/%.o: src/%.c
+	@mkdir -p $(dir $@)
 	$(CC) $< -o $@ -c $(FLAGS)
 
-obj/%.o: src/%.c | objFolder
-	$(CC) $< -o $@ -c $(FLAGS)
+test%: obj/test/test%.o obj/btree.o
+	$(CC) $^ -o $@ $(FLAGS)
 
 main: obj/main.o obj/btree.o
 	$(CC) $^ -o $@ $(FLAGS)
 
-benchmark%.out: obj/benchmark%_test.o obj/btree.o
-	$(CC) $^ -o $@ $(FLAGS)
+tests: $(TESTS)
 
 clean:
-	rm -rf obj
+	rm -rf obj main $(TESTS)
 
 -include $(DEP)
 
-.PHONY: all clean objFolder
+.PHONY: all clean tests
 
+.PRECIOUS: obj/%.o
