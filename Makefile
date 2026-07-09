@@ -1,9 +1,9 @@
-CC 		:= gcc
-FLAGS 	:= -Wall -Wextra -MMD -MP
-SRC 	:= $(wildcard src/**/*.c)
-OBJ 	:= $(SRC:src/%.c=obj/%.o)
+CC	:= gcc
+FLAGS	:= -Wall -Wextra -MMD -MP -Wno-override-init
+SRC	:= $(wildcard src/**/*.c)
+OBJ	:= $(SRC:src/%.c=obj/%.o)
 TESTS	:= $(SRC:src/test/%.c=%)
-DEP 	:= $(OBJ:.o=.d)
+DEP	:= $(OBJ:.o=.d)
 
 ifdef DEBUG
 	FLAGS += -g -O0

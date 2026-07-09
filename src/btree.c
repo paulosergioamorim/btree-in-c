@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -9,6 +10,8 @@
 #include <unistd.h>
 
 static const int __btree_magic_bytes = 0x4654427f; // 0x7F 'B' 'T' 'F'
+
+int btree_node_is_valid(const Btree *btree, const Btree_Node *node);
 
 size_t btree_node_size_in_file(const Btree *btree);
 
@@ -54,27 +57,31 @@ void btree_node_rotate_right(const Btree *btree, Btree_Node *x, Btree_Node *y, B
 
 void btree_remove_node(Btree *btree, Btree_Node *x);
 
-Btree_Result btree_init(Btree *btree, const char *path, int t) {
+void btree_log(const Btree *btree, Btree_Log_Level level, const char *fmt, ...);
+
+Btree_Result btree_init_(Btree *btree, Btree_Options options) {
     if (btree == NULL)
         return BTREE_ERROR_NULLPTR;
 
-    *btree = (Btree){0};
-    btree->fd = open(path, O_RDWR);
+    *btree = (Btree){
+        .log_handler = options.log_handler,
+        .fd = open(options.path, O_RDWR),
+    };
 
     if (btree->fd == -1 && errno == ENOENT) {
-        if (t < 2)
+        if (options.t < 2)
             return BTREE_ERROR_SMALL_T;
 
-        btree->header.t = t;
-        btree->header.M = 2 * t;
-        btree->header.count_nodes = 0;
-        btree->header.next_offset = sizeof(__btree_magic_bytes) + sizeof(btree->header);
-        btree->fd = open(path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+        btree->header = (Btree_Header){
+            .t = options.t,
+            .M = 2 * options.t,
+            .next_offset = sizeof(__btree_magic_bytes) + sizeof(btree->header),
+        };
+        btree->fd = open(options.path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
 
         if (btree->fd == -1)
             return BTREE_ERROR;
 
-        btree->header.next_free_offset = 0;
         btree->root = btree_append_node(btree);
         btree->header.root_offset = btree->root->offset;
         btree_header_write(btree);
@@ -90,13 +97,13 @@ Btree_Result btree_init(Btree *btree, const char *path, int t) {
     }
 
     Btree_Node *root = btree_node_init(btree);
-    btree_node_read2(btree, root, btree->header.root_offset);
 
-    if (!btree->root) {
+    if (!root) {
         close(btree->fd);
         return BTREE_ERROR;
     }
 
+    btree_node_read2(btree, root, btree->header.root_offset);
     btree_set_root(btree, root);
     return BTREE_OK;
 }
@@ -119,6 +126,7 @@ Btree_Result btree_insert(Btree *btree, int key, int value) {
     btree_node_split_child(btree, s, btree->root, 0);
     btree_node_destroy(btree->root);
     btree_set_root(btree, s);
+    btree_header_write(btree);
     return btree_node_insert_nonfull(btree, s, key, value);
 }
 
@@ -398,6 +406,7 @@ void btree_node_merge(Btree *btree, Btree_Node *x, Btree_Node *y, Btree_Node *z,
     y->count_keys++;
     memmove(x->items + i, x->items + i + 1, (x->count_keys - i - 1) * sizeof(*x->items));
     memmove(x->children + i + 1, x->children + i + 2, (x->count_keys - i - 1) * sizeof(*x->children));
+    x->children[x->count_keys] = 0;
     x->count_keys--;
     memcpy(y->items + y->count_keys, z->items, (t - 1) * sizeof(*y->items));
 
@@ -643,4 +652,100 @@ void btree_set_root(Btree *btree, Btree_Node *node) {
 size_t btree_node_size_in_file(const Btree *btree) {
     return sizeof(btree->root->count_keys) + (btree->header.M - 1) * sizeof(*btree->root->items) +
            (btree->header.M) * sizeof(*btree->root->children);
+}
+
+int btree_is_valid(const Btree *btree) {
+    if (btree->header.M != btree->header.t * 2) {
+        return 0;
+    }
+    return btree_node_is_valid(btree, btree->root);
+}
+
+int btree_node_is_valid(const Btree *btree, const Btree_Node *node) {
+    int t = btree->header.t;
+    int M = btree->header.M;
+
+    if (btree->root != node && !(t - 1 <= node->count_keys && node->count_keys <= M - 1)) {
+        btree_log(btree, BTREE_LOG_ERROR, "FORA DO LLIMITE DE CHAVES");
+        return 0;
+    }
+
+    if (node->is_leaf) {
+        for (int i = 0; i <= node->count_keys; i++) {
+            if (node->children[i] != 0) {
+                btree_log(btree, BTREE_LOG_ERROR, "SUJEIRA NO ARRAY DE FILHOS SENDO FOLHA");
+                return 0;
+            }
+        }
+    } else {
+        for (int i = 0; i <= node->count_keys; i++) {
+            if (node->children[i] == 0) {
+                btree_log(btree, BTREE_LOG_ERROR, "MENOS FILHOS QUE DEVERIA");
+                return 0;
+            }
+        }
+        for (int i = node->count_keys + 1; i < M; i++) {
+            if (node->children[i] != 0) {
+                btree_log(btree, BTREE_LOG_ERROR, "SUJEIRA NO ARRAY DE FILHOS SENDO INTERNO");
+                return 0;
+            }
+        }
+    }
+
+    for (int i = 1; i < node->count_keys; i++) {
+        if (node->items[i].key < node->items[i - 1].key) {
+            btree_log(btree, BTREE_LOG_ERROR, "CHAVES DESORDENADAS");
+            return 0;
+        }
+    }
+
+    btree_log(btree, BTREE_LOG_INFO, "NODO %ld OK", node->offset);
+    if (node->is_leaf) {
+        return 1;
+    }
+
+    Btree_Node *child = btree_node_init(btree);
+    for (int i = 0; i <= node->count_keys; i++) {
+        btree_node_read2(btree, child, node->children[i]);
+        if (!btree_node_is_valid(btree, child)) {
+            btree_node_destroy(child);
+            return 0;
+        }
+    }
+    btree_node_destroy(child);
+
+    return 1;
+}
+
+#define LOG_LEVELS                                                                                                     \
+    LEVEL(BTREE_LOG_DEBUG, "DEBUG")                                                                                    \
+    LEVEL(BTREE_LOG_WARN, "WARN")                                                                                      \
+    LEVEL(BTREE_LOG_INFO, "INFO")                                                                                      \
+    LEVEL(BTREE_LOG_ERROR, "ERROR")
+
+void btree_default_log_handler(Btree_Log_Level level, const char *fmt, va_list args) {
+    switch (level) {
+#define LEVEL(kind, prefix)                                                                                            \
+    case kind:                                                                                                         \
+        fprintf(stderr, "[%s] ", prefix);                                                                              \
+        break;
+        LOG_LEVELS
+#undef LEVEL
+    }
+
+    vfprintf(stderr, fmt, args);
+    fprintf(stderr, "\n");
+}
+
+void btree_discard_log_handler(Btree_Log_Level level, const char *fmt, va_list args) {
+    BTREE_UNUSED(level);
+    BTREE_UNUSED(fmt);
+    BTREE_UNUSED(args);
+}
+
+void btree_log(const Btree *btree, Btree_Log_Level level, const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    btree->log_handler(level, fmt, args);
+    va_end(args);
 }

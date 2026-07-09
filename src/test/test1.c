@@ -4,10 +4,7 @@
 #include <time.h>
 
 #include "../btree.h"
-
-void swap(int *x1, int *x2);
-
-void shuffle(int *vec, int len);
+#include "utils.h"
 
 int main() {
     int len = 10000000; // the test size
@@ -15,7 +12,7 @@ int main() {
     int t = 200;
     Btree btree;
     remove("benchmark1.db");
-    int ok = btree_init(&btree, "benchmark1.db", t);
+    int ok = btree_init(&btree, .path = "benchmark1.db", .t = t);
     assert(ok == BTREE_OK && "Failed to init btree");
     srand48(seed);
     int *keys = malloc(len * sizeof(*keys));
@@ -46,17 +43,4 @@ int main() {
     btree_destroy(&btree);
     free(keys);
     return 0;
-}
-
-void swap(int *x1, int *x2) {
-    int temp = *x1;
-    *x1 = *x2;
-    *x2 = temp;
-}
-
-void shuffle(int *vec, int len) {
-    for (int i = 0; i < len; i++) {
-        int j = rand() % (i + 1);
-        swap(&vec[i], &vec[j]);
-    }
 }

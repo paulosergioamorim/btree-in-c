@@ -1,4 +1,3 @@
-#define BTREE_DISPLAY_IMPLEMENTATION
 #include "btree.h"
 #include <assert.h>
 #include <stdio.h>
@@ -12,45 +11,46 @@ int main(int argc, const char **argv) {
     Btree btree;
 
     int t = argc > 2 ? atoi(argv[2]) : 0;
-    int res = btree_init(&btree, path, t);
+    int res = btree_init(&btree, .path = path, .t = t);
 
     if (res != BTREE_OK) {
         printf("%s\n", btree_strerr(res));
         return 0;
     }
 
+    char prompt[256];
     char op = '\0';
 
     while (1) {
-        scanf("%c", &op);
+        fgets(prompt, sizeof(prompt), stdin);
+        sscanf(prompt, "%c", &op);
 
-        if (op == 'Q')
+        if (op == 'Q') {
             break;
-
-        if (op == 'I') {
+        } else if (op == 'I') {
             int key, value;
-            scanf("%d %d", &key, &value);
+            if (sscanf(prompt, "I %d %d", &key, &value) != 2) {
+                printf("Bad input\n");
+            }
             btree_insert(&btree, key, value);
-            continue;
-        }
-
-        if (op == 'S') {
-            int key, value;
-            scanf("%d", &key);
+        } else if (op == 'S') {
+            int key = 0, value = 0;
+            if (sscanf(prompt, "S %d", &key) != 1) {
+                printf("Bad input\n");
+            }
             int res = btree_find(&btree, key, &value);
             printf("%s %d\n", res == BTREE_OK ? "HIT VALUE" : "MISS KEY", res == BTREE_OK ? value : key);
-            continue;
-        }
-
-        if (op == 'D') {
-            int key;
-            scanf("%d", &key);
+        } else if (op == 'D') {
+            int key = 0;
+            if (sscanf(prompt, "D %d", &key) != 1) {
+                printf("Bad input\n");
+            }
             btree_delete(&btree, key);
-            continue;
-        }
-
-        if (op == 'P')
+        } else if (op == 'P') {
             btree_display(&btree, stdout);
+        } else if (op == 'V') {
+            btree_is_valid(&btree);
+        }
     }
 
     btree_destroy(&btree);
