@@ -551,35 +551,21 @@ void btree_header_write(const Btree *btree) {
     pwritev(btree->fd, vec, n, 0);
 }
 
-#define btree_node_enqueue(queue, head, count, offset)                                                                 \
-    ({                                                                                                                 \
-        int idx = (head + count) % btree->header.count_nodes;                                                          \
-        queue[idx] = offset;                                                                                           \
-        count++;                                                                                                       \
-    })
-
-#define btree_node_dequeue(queue, head, count)                                                                         \
-    ({                                                                                                                 \
-        int offset = queue[head];                                                                                      \
-        head = (head + 1) % btree->header.count_nodes;                                                                 \
-        count--;                                                                                                       \
-        offset;                                                                                                        \
-    })
-
 Btree_Result btree_display(const Btree *btree, FILE *fp) {
     if (!btree)
         return BTREE_ERROR_NULLPTR;
 
     size_t last_level_offset = btree->root->offset;
-    // todo: add upper bound limit
-    size_t queue[btree->header.count_nodes];
-    int head = 0;
-    int count = 0;
-    btree_node_enqueue(queue, head, count, btree->root->offset);
+    Btree_Queue queue;
+    if (!btree_queue_init(&queue, btree->header.count_nodes)) {
+        btree_log(btree, BTREE_LOG_ERROR, "Error to init offset queue");
+        return BTREE_ERROR;
+    }
+    btree_queue_enqueue(&queue, btree->root->offset);
     Btree_Node *node = btree_node_init(btree);
 
-    while (count > 0) {
-        size_t offset = btree_node_dequeue(queue, head, count);
+    while (queue.count > 0) {
+        size_t offset = btree_queue_dequeue(&queue);
         btree_node_read2(btree, node, offset);
 
         fprintf(fp, "[ ");
@@ -598,10 +584,11 @@ Btree_Result btree_display(const Btree *btree, FILE *fp) {
             continue;
 
         for (int i = 0; i <= node->count_keys; i++)
-            btree_node_enqueue(queue, head, count, node->children[i]);
+            btree_queue_enqueue(&queue, node->children[i]);
     }
 
     btree_node_destroy(node);
+    btree_queue_destroy(&queue);
     return BTREE_OK;
 }
 
@@ -748,4 +735,42 @@ void btree_log(const Btree *btree, Btree_Log_Level level, const char *fmt, ...) 
     va_start(args, fmt);
     btree->log_handler(level, fmt, args);
     va_end(args);
+}
+
+bool btree_queue_init(Btree_Queue *queue, int capacity) {
+    if (!queue) {
+        return false;
+    }
+    *queue = (Btree_Queue){0};
+    queue->capacity = capacity;
+    queue->items = malloc(capacity * sizeof(*queue->items));
+    return queue->items != NULL;
+}
+
+bool btree_queue_enqueue(Btree_Queue *queue, size_t offset) {
+    if (!queue || offset == 0 || queue->count == queue->capacity) {
+        return false;
+    }
+    queue->items[queue->head++] = offset;
+    queue->head %= queue->capacity;
+    queue->count++;
+    return true;
+}
+
+size_t btree_queue_dequeue(Btree_Queue *queue) {
+    if (!queue || queue->count == 0) {
+        return 0;
+    }
+    size_t offset = queue->items[queue->tail++];
+    queue->tail %= queue->capacity;
+    queue->count--;
+    return offset;
+}
+
+void btree_queue_destroy(Btree_Queue *queue) {
+    if (!queue) {
+        return;
+    }
+    free(queue->items);
+    *queue = (Btree_Queue){0};
 }
