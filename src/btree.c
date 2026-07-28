@@ -59,7 +59,15 @@ void btree_remove_node(Btree *btree, Btree_Node *x);
 
 void btree_log(const Btree *btree, Btree_Log_Level level, const char *fmt, ...);
 
-Btree_Result btree_init_(Btree *btree, Btree_Options options) {
+bool btree_queue_init(Btree_Queue *queue, int capacity);
+
+bool btree_queue_enqueue(Btree_Queue *queue, size_t offset);
+
+size_t btree_queue_dequeue(Btree_Queue *queue);
+
+void btree_queue_destroy(Btree_Queue *queue);
+
+Btree_Result btree_init(Btree *btree, Btree_Options options) {
     if (btree == NULL)
         return BTREE_ERROR_NULLPTR;
 
@@ -653,27 +661,27 @@ int btree_node_is_valid(const Btree *btree, const Btree_Node *node) {
     int M = btree->header.M;
 
     if (btree->root != node && !(t - 1 <= node->count_keys && node->count_keys <= M - 1)) {
-        btree_log(btree, BTREE_LOG_ERROR, "FORA DO LLIMITE DE CHAVES");
+        btree_log(btree, BTREE_LOG_ERROR, "Keys out of bounds [t-1,2t-1]");
         return 0;
     }
 
     if (node->is_leaf) {
         for (int i = 0; i <= node->count_keys; i++) {
             if (node->children[i] != 0) {
-                btree_log(btree, BTREE_LOG_ERROR, "SUJEIRA NO ARRAY DE FILHOS SENDO FOLHA");
+                btree_log(btree, BTREE_LOG_ERROR, "Dirty children in leaf node");
                 return 0;
             }
         }
     } else {
         for (int i = 0; i <= node->count_keys; i++) {
             if (node->children[i] == 0) {
-                btree_log(btree, BTREE_LOG_ERROR, "MENOS FILHOS QUE DEVERIA");
+                btree_log(btree, BTREE_LOG_ERROR, "Fewer children");
                 return 0;
             }
         }
         for (int i = node->count_keys + 1; i < M; i++) {
             if (node->children[i] != 0) {
-                btree_log(btree, BTREE_LOG_ERROR, "SUJEIRA NO ARRAY DE FILHOS SENDO INTERNO");
+                btree_log(btree, BTREE_LOG_ERROR, "Dirty children in internal node");
                 return 0;
             }
         }
@@ -681,12 +689,11 @@ int btree_node_is_valid(const Btree *btree, const Btree_Node *node) {
 
     for (int i = 1; i < node->count_keys; i++) {
         if (node->items[i].key < node->items[i - 1].key) {
-            btree_log(btree, BTREE_LOG_ERROR, "CHAVES DESORDENADAS");
+            btree_log(btree, BTREE_LOG_ERROR, "Unordered keys");
             return 0;
         }
     }
 
-    btree_log(btree, BTREE_LOG_INFO, "NODO %ld OK", node->offset);
     if (node->is_leaf) {
         return 1;
     }
@@ -699,8 +706,8 @@ int btree_node_is_valid(const Btree *btree, const Btree_Node *node) {
             return 0;
         }
     }
-    btree_node_destroy(child);
 
+    btree_node_destroy(child);
     return 1;
 }
 

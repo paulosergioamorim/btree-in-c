@@ -12,7 +12,7 @@ int main() {
     int t = 200;
     Btree btree;
     remove("benchmark2.db");
-    int ok = btree_init(&btree, .path = "benchmark2.db", .t = t);
+    int ok = BTREE_INIT(&btree, .path = "benchmark2.db", .t = t);
     assert(ok == BTREE_OK && "Failed to init btree");
     srand48(seed);
     int *keys = malloc(len * sizeof(*keys));

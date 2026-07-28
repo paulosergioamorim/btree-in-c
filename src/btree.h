@@ -44,6 +44,14 @@ typedef struct btree_node {
     size_t *children;
 } Btree_Node;
 
+typedef struct btree_queue {
+    int head;
+    int tail;
+    int count;
+    int capacity;
+    size_t *items;
+} Btree_Queue;
+
 typedef struct btree_header {
     int t;
     int M;
@@ -68,10 +76,10 @@ typedef struct btree_opt {
 
 #define BTREE_UNUSED(x) (void)(x)
 
-Btree_Result btree_init_(Btree *btree, Btree_Options options);
+Btree_Result btree_init(Btree *btree, Btree_Options options);
 
-#define btree_init(btree, ...)                                                                                         \
-    btree_init_(btree, (Btree_Options){.log_handler = btree_default_log_handler, __VA_ARGS__})
+#define BTREE_INIT(btree, ...)                                                                                         \
+    btree_init((btree), (Btree_Options){.log_handler = btree_default_log_handler, __VA_ARGS__})
 
 Btree_Result btree_find(const Btree *btree, int key, int *value);
 

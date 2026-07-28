@@ -11,7 +11,7 @@ int main(int argc, const char **argv) {
     Btree btree;
 
     int t = argc > 2 ? atoi(argv[2]) : 0;
-    int res = btree_init(&btree, .path = path, .t = t);
+    int res = BTREE_INIT(&btree, .path = path, .t = t);
 
     if (res != BTREE_OK) {
         printf("%s\n", btree_strerr(res));
