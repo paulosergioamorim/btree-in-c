@@ -9,8 +9,6 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
-static const int __btree_magic_bytes = 0x4654427f; // 0x7F 'B' 'T' 'F'
-
 int btree_node_is_valid(const Btree *btree, const Btree_Node *node);
 
 size_t btree_node_size_in_file(const Btree *btree);
@@ -23,7 +21,7 @@ void btree_node_destroy(Btree_Node *node);
 
 void btree_header_write(const Btree *btree);
 
-void btree_header_read(Btree *btree, int *magic_bytes);
+void btree_header_read(Btree *btree, uint8_t *magic_bytes);
 
 void btree_set_root(Btree *btree, Btree_Node *node);
 
@@ -83,7 +81,7 @@ Btree_Result btree_init(Btree *btree, Btree_Options options) {
         btree->header = (Btree_Header){
             .t = options.t,
             .M = 2 * options.t,
-            .next_offset = sizeof(__btree_magic_bytes) + sizeof(btree->header),
+            .next_offset = sizeof(btree_magic_bytes) + sizeof(btree->header),
         };
         btree->fd = open(options.path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
 
@@ -96,10 +94,10 @@ Btree_Result btree_init(Btree *btree, Btree_Options options) {
         return BTREE_OK;
     }
 
-    int magic_bytes = 0;
-    btree_header_read(btree, &magic_bytes);
+    uint8_t magic_bytes[sizeof(btree_magic_bytes)] = {0};
+    btree_header_read(btree, magic_bytes);
 
-    if (magic_bytes != __btree_magic_bytes) {
+    if (memcmp(magic_bytes, btree_magic_bytes, sizeof(magic_bytes)) != 0) {
         close(btree->fd);
         return BTREE_ERROR_FORMAT;
     }
@@ -539,11 +537,11 @@ const char *btree_strerr(int err) {
     }
 }
 
-void btree_header_read(Btree *btree, int *magic_bytes) {
+void btree_header_read(Btree *btree, uint8_t *magic_bytes) {
     int n = 2;
     struct iovec vec[n];
     vec[0].iov_base = magic_bytes;
-    vec[0].iov_len = sizeof(*magic_bytes);
+    vec[0].iov_len = sizeof(btree_magic_bytes);
     vec[1].iov_base = &btree->header;
     vec[1].iov_len = sizeof(btree->header);
     preadv(btree->fd, vec, n, 0);
@@ -552,9 +550,9 @@ void btree_header_read(Btree *btree, int *magic_bytes) {
 void btree_header_write(const Btree *btree) {
     int n = 2;
     struct iovec vec[n];
-    vec[0].iov_base = (void *)&__btree_magic_bytes;
-    vec[0].iov_len = sizeof(__btree_magic_bytes);
-    vec[1].iov_base = (void *)&btree->header;
+    vec[0].iov_base = (uint8_t *)btree_magic_bytes;
+    vec[0].iov_len = sizeof(btree_magic_bytes);
+    vec[1].iov_base = (Btree_Header *)&btree->header;
     vec[1].iov_len = sizeof(btree->header);
     pwritev(btree->fd, vec, n, 0);
 }
@@ -630,7 +628,7 @@ void btree_node_read2(const Btree *btree, Btree_Node *node, size_t offset) {
 void btree_node_write(const Btree *btree, const Btree_Node *node) {
     int n = 3;
     struct iovec vec[n];
-    vec[0].iov_base = (void *)&node->count_keys;
+    vec[0].iov_base = (int *)&node->count_keys;
     vec[0].iov_len = sizeof(node->count_keys);
     vec[1].iov_base = node->items;
     vec[1].iov_len = (btree->header.M - 1) * sizeof(*node->items);

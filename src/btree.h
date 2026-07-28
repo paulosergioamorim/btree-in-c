@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 
 typedef int Btree_Fd;
@@ -73,6 +74,8 @@ typedef struct btree_opt {
     int t;
     Btree_Log_Handler log_handler;
 } Btree_Options;
+
+static const uint8_t btree_magic_bytes[] = {0x7F, 'B', 'T', 'F'};
 
 #define BTREE_UNUSED(x) (void)(x)
 
