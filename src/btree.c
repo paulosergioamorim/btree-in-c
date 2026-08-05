@@ -1,4 +1,5 @@
 #include "btree.h"
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -66,20 +67,17 @@ Btree_Result btree_init(Btree *btree, Btree_Options options) {
     if (btree == NULL)
         return BTREE_ERROR_NULLPTR;
 
-    *btree = (Btree){
-        .log_handler = options.log_handler,
-        .fd = open(options.path, O_RDWR),
-    };
+    memset(btree, 0, sizeof(*btree));
+    btree->log_handler = options.log_handler;
+    btree->fd = open(options.path, O_RDWR);
 
     if (btree->fd == -1 && errno == ENOENT) {
         if (options.t < 2)
             return BTREE_ERROR_SMALL_T;
 
-        btree->header = (Btree_Header){
-            .t = options.t,
-            .M = 2 * options.t,
-            .next_offset = sizeof(btree_magic_bytes) + sizeof(btree->header),
-        };
+        btree->header.t = options.t;
+        btree->header.M = 2 * options.t;
+        btree->header.next_offset = sizeof(btree_magic_bytes) + sizeof(btree->header);
         btree->fd = open(options.path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
 
         if (btree->fd == -1)
@@ -170,7 +168,7 @@ Btree_Result btree_node_find(const Btree *btree, Btree_Node *x, int key, int *va
 
     Btree_Node *x_ci = btree_node_init(btree);
     btree_node_read2(btree, x_ci, x->children[i]);
-    int res = btree_node_find(btree, x_ci, key, value);
+    Btree_Result res = btree_node_find(btree, x_ci, key, value);
     btree_node_destroy(x_ci);
     return res;
 }
@@ -257,7 +255,7 @@ Btree_Result btree_node_insert_nonfull(Btree *btree, Btree_Node *x, int key, int
     btree_node_read2(btree, x_ci, x->children[i]);
 
     if (x_ci->count_keys < btree->header.M - 1) {
-        int res = btree_node_insert_nonfull(btree, x_ci, key, value);
+        Btree_Result res = btree_node_insert_nonfull(btree, x_ci, key, value);
         btree_node_destroy(x_ci);
         return res;
     }
@@ -269,15 +267,16 @@ Btree_Result btree_node_insert_nonfull(Btree *btree, Btree_Node *x, int key, int
         btree_node_read2(btree, x_ci, x->children[i]);
     }
 
-    int res = btree_node_insert_nonfull(btree, x_ci, key, value);
+    Btree_Result res = btree_node_insert_nonfull(btree, x_ci, key, value);
     btree_node_destroy(x_ci);
     return res;
 }
 
 Btree_Result btree_node_delete(Btree *btree, Btree_Node *node, int key) {
-    int i = 0, res = 0;
+    int i = 0;
     int t = btree->header.t;
     Btree_Node *y = NULL, *z = NULL, *x_ci = NULL, *sibbling_left = NULL, *sibbling_right = NULL;
+    Btree_Result res = BTREE_OK;
 
     while (i < node->count_keys && key > node->items[i].key)
         i++;
@@ -286,7 +285,7 @@ Btree_Result btree_node_delete(Btree *btree, Btree_Node *node, int key) {
         if (node->is_leaf) {
             memmove(node->items + i, node->items + i + 1, (node->count_keys - i - 1) * sizeof(*node->items));
             node->count_keys--;
-            node->items[node->count_keys] = (Item){0};
+            memset(&node->items[node->count_keys], 0, sizeof(*node->items));
             btree_node_write(btree, node);
             return BTREE_OK;
         }
@@ -479,7 +478,7 @@ void btree_node_rotate_left(const Btree *btree, Btree_Node *x, Btree_Node *y, Bt
         memmove(z->children, z->children + 1, z->count_keys * sizeof(*z->children));
 
     z->count_keys--;
-    z->items[z->count_keys] = (Item){0};
+    memset(&z->items[z->count_keys], 0, sizeof(*z->items));
 
     if (!z->is_leaf)
         z->children[z->count_keys + 1] = 0;
@@ -503,7 +502,7 @@ void btree_node_rotate_right(const Btree *btree, Btree_Node *x, Btree_Node *y, B
     z->count_keys++;
     x->items[i] = y->items[y->count_keys - 1];
     y->count_keys--;
-    y->items[y->count_keys] = (Item){0};
+    memset(&y->items[y->count_keys], 0, sizeof(*y->items));
 
     if (!y->is_leaf)
         y->children[y->count_keys + 1] = 0;
@@ -596,15 +595,14 @@ Btree_Result btree_display(const Btree *btree, FILE *fp) {
 }
 
 Btree_Node *btree_node_init(const Btree *btree) {
-    Btree_Node *node = NULL;
-    size_t node_size = sizeof(*node);
-    size_t items_size = (btree->header.M - 1) * sizeof(*node->items);
-    size_t children_size = (btree->header.M) * sizeof(*node->children);
-    node = calloc(1, node_size + items_size + children_size);
+    size_t node_size = sizeof(*btree->root);
+    size_t items_size = (btree->header.M - 1) * sizeof(*btree->root->items);
+    size_t children_size = (btree->header.M) * sizeof(*btree->root->children);
+    Btree_Node *node = (Btree_Node *)calloc(1, node_size + items_size + children_size);
     if (!node)
         return NULL;
-    node->items = (void *)node + node_size;
-    node->children = (void *)node + node_size + items_size;
+    node->items = (Item *)((char *)node + node_size);
+    node->children = (size_t *)((char *)node + node_size + items_size);
     return node;
 }
 
@@ -743,9 +741,9 @@ bool btree_queue_init(Btree_Queue *queue, int capacity) {
     if (!queue) {
         return false;
     }
-    *queue = (Btree_Queue){0};
+    memset(queue, 0, sizeof(*queue));
     queue->capacity = capacity;
-    queue->items = malloc(capacity * sizeof(*queue->items));
+    queue->items = (size_t *)malloc(capacity * sizeof(*queue->items));
     return queue->items != NULL;
 }
 
@@ -774,5 +772,5 @@ void btree_queue_destroy(Btree_Queue *queue) {
         return;
     }
     free(queue->items);
-    *queue = (Btree_Queue){0};
+    memset(queue, 0, sizeof(*queue));
 }
