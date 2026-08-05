@@ -26,7 +26,7 @@ int main() {
     time_t start = clock();
     for (int i = 0; i < len; i++) {
         int key = keys[i];
-        int ok = btree_insert(&btree, key, key);
+        int ok = btree_put(&btree, key, key);
         if (ok != BTREE_OK) {
             printf("%s\n", btree_strerr(ok));
             assert(0);

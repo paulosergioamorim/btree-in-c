@@ -32,7 +32,7 @@ int main(int argc, const char **argv) {
             if (sscanf(prompt, "I %d %d", &key, &value) != 2) {
                 printf("Bad input\n");
             }
-            btree_insert(&btree, key, value);
+            btree_put(&btree, key, value);
         } else if (op == 'S') {
             int key = 0, value = 0;
             if (sscanf(prompt, "S %d", &key) != 1) {

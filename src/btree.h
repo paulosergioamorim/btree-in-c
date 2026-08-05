@@ -20,11 +20,11 @@ typedef void (*Btree_Log_Handler)(Btree_Log_Level level, const char *fmt, va_lis
 
 typedef enum btree_result {
     BTREE_OK,
-    BTREE_ERROR,
-    BTREE_ERROR_NULLPTR,
-    BTREE_ERROR_SMALL_T,
+    BTREE_ERROR_UNIX,
+    BTREE_ERROR_INTERNAL,
+    BTREE_ERROR_NIL,
+    BTREE_ERROR_BAD_T,
     BTREE_ERROR_KEY_NOT_FOUND,
-    BTREE_ERROR_KEY_EXISTS,
     BTREE_ERROR_FORMAT,
 } Btree_Result;
 
@@ -86,7 +86,7 @@ Btree_Result btree_init(Btree *btree, Btree_Options options);
 
 Btree_Result btree_find(const Btree *btree, int key, int *value);
 
-Btree_Result btree_insert(Btree *btree, int key, int value);
+Btree_Result btree_put(Btree *btree, int key, int value);
 
 Btree_Result btree_delete(Btree *btree, int key);
 
