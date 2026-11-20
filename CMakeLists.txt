@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.23)
 
-project(btree LANGUAGES C)
+project(btree C)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -13,8 +13,6 @@ target_sources(repl
     src/repl.c
     src/btree.c
 )
-
-target_link_libraries(repl uring)
 
 target_sources(btree
   PRIVATE
