@@ -674,9 +674,9 @@ size_t btree_node_size_in_file(const Btree *btree) {
            (btree->header.M) * sizeof(*btree->root->children);
 }
 
-int btree_is_valid(const Btree *btree) {
+bool btree_is_valid(const Btree *btree) {
     if (btree->header.M != btree->header.t * 2) {
-        return 0;
+        return false;
     }
     return btree_node_is_valid(btree, btree->root);
 }

@@ -94,7 +94,7 @@ Btree_Result btree_destroy(Btree *btree);
 
 Btree_Result btree_display(const Btree *btree, FILE *fp);
 
-int btree_is_valid(const Btree *btree);
+bool btree_is_valid(const Btree *btree);
 
 const char *btree_strerr(int err);
 
