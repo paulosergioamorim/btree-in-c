@@ -98,7 +98,4 @@ bool btree_is_valid(const Btree *btree);
 
 const char *btree_strerr(int err);
 
-#ifdef BTREE_IMPLEMENTATION
-#endif // BTREE_IMPLEMENTATION
-
 #endif // BTREE_H
